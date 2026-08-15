@@ -6,7 +6,7 @@
 <title>The Grind</title>
 <style>
   /* ============================================================
-     THE GRIND — personal command center   (v1.0-beta)
+     THE GRIND — personal command center   (v1.1-beta)
      Forked from Family Planner but fully data-isolated: its own Firebase
      path (planners/the-grind-scattabrain-2026) and its own grind.* localStorage keys.
      One day list (multi-profile tags) with Done/Later/Someday views, Shopping + Quick Notes
@@ -43,6 +43,24 @@
      grind.plan.v1, The Grind's own Firebase payload, or its JSON export/import; only a status
      change (To do/Doing/Done) writes back, via a guarded, ID-based Firebase transaction into
      Family Planner's own node.
+     The Other Grind (v1.1): a behavioural time-awareness tracker pinned above everything else,
+     because it has to be the first thing visible. One session at a time in one of three
+     user-declared modes — Productive, Intentional Leisure, Autopilot — where the mode is always the
+     user's statement about their own intention and is never inferred from the activity: the same
+     activity legitimately belongs to different modes on different days. Leisure sessions may carry
+     an intended duration; when that window closes the app surfaces exactly ONE decision point
+     (+15 / +30 / I'm done / switch to Autopilot) rather than a repeating nag. Extending is a
+     conscious recommitment, so it RAISES the authorised total and produces no overrun — pressing
+     +30 is a success state, not a failure. Overrun is only ever time past an explicitly authorised
+     window. Time Debt (autopilot + overrun) is informational and never repaid, never carried into
+     tomorrow, never used to lock, penalise, or shame anything. Sessions live entirely in
+     timestamps (grind.og.sessions.v1 / grind.og.active.v1 / grind.og.settings.v1), so refresh,
+     browser restart, and sleep all reconstruct elapsed time correctly, and totals are always
+     derived from stored sessions — a session crossing midnight or the week boundary stays one
+     record while its duration is split across the reporting boundary. Session history and the
+     waking-hours setting sync and export like any other Grind data; the ACTIVE session syncs
+     through an explicit {mode:"idle"} sentinel (so a stop propagates between devices) but is
+     deliberately excluded from import/export.
      Optional live cloud sync across devices (Firebase — see config block).
      Self-contained, offline, saves to localStorage.
      Edit SEED_PEOPLE / palette to taste.
@@ -517,6 +535,117 @@
   .empty-state .big { font-size:16px; font-weight:600; color:var(--ink); margin-bottom:5px; }
   .hint { font-size:11.5px; color:var(--muted-2); margin-top:22px; text-align:center; font-family:var(--mono); }
 
+  /* ============================================================
+     THE OTHER GRIND — behavioral time awareness
+     --og-accent is set inline per active mode (idle/productive/leisure/
+     autopilot) so every accent in the panel follows the current mode from
+     one assignment. Ambient escalation (.og-amb-1..3) only scales the timer
+     and firms up the border — deliberately no flashing, no animation, no
+     colour shift toward alarm red: peripheral awareness, not anxiety.
+     ============================================================ */
+  .og { --og-accent:var(--muted-2); background:radial-gradient(120% 160% at 100% 0%, #241833 0%, #150E1F 62%); border:1px solid var(--line); border-radius:16px; padding:14px 16px 12px; margin-bottom:16px; box-shadow:var(--shadow); transition:border-color .6s ease, box-shadow .6s ease; }
+  .og.og-running { border-color:color-mix(in srgb, var(--og-accent) 45%, var(--line)); }
+  .og.og-amb-1 { box-shadow:var(--shadow), 0 0 0 1px color-mix(in srgb, var(--og-accent) 22%, transparent); }
+  .og.og-amb-2 { box-shadow:var(--shadow), 0 0 0 2px color-mix(in srgb, var(--og-accent) 30%, transparent); }
+  .og.og-amb-3 { box-shadow:var(--shadow), 0 0 0 3px color-mix(in srgb, var(--og-accent) 40%, transparent); }
+  .og-head { display:flex; align-items:flex-start; gap:16px; flex-wrap:wrap; }
+  .og-lead { flex:1; min-width:190px; }
+  .og-eyebrow { font-family:var(--mono); font-size:10px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted-2); }
+  .og-mode { font-size:19px; font-weight:700; letter-spacing:.01em; color:var(--og-accent); margin:3px 0 2px; display:flex; align-items:center; gap:8px; }
+  .og-mode .og-dot { width:9px; height:9px; border-radius:50%; background:var(--og-accent); flex:none; }
+  .og-sub { font-family:var(--mono); font-size:12px; color:var(--muted); display:flex; gap:12px; flex-wrap:wrap; }
+  .og-sub .og-over { color:var(--star); font-weight:700; }
+  .og-readout { text-align:right; font-family:var(--mono); flex:none; min-width:150px; }
+  .og-timer { font-size:30px; font-weight:700; color:var(--ink); line-height:1.1; font-variant-numeric:tabular-nums; transition:font-size .6s ease; }
+  .og.og-amb-1 .og-timer { font-size:34px; }
+  .og.og-amb-2 .og-timer { font-size:38px; }
+  .og.og-amb-3 .og-timer { font-size:42px; }
+  .og-remaining { font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted-2); margin-top:2px; }
+  .og-remaining.low { color:var(--star); }
+  .og-remaining.spent { color:var(--alarm); }
+  .og-controls { display:flex; gap:7px; flex-wrap:wrap; margin-top:12px; }
+  .og-btn { font-family:var(--sans); font-size:12.5px; font-weight:700; letter-spacing:.03em; border:1px solid var(--line); background:var(--card); color:var(--ink); padding:8px 13px; border-radius:10px; cursor:pointer; white-space:nowrap; }
+  .og-btn:hover { border-color:var(--muted-2); }
+  .og-btn.on { color:#14091F; }
+  .og-btn[data-mode=productive].on { background:#23B877; border-color:#23B877; }
+  .og-btn[data-mode=leisure].on { background:#3B97E6; border-color:#3B97E6; }
+  .og-btn[data-mode=autopilot].on { background:#F2A81D; border-color:#F2A81D; }
+  .og-btn.og-stop { margin-left:auto; }
+  .og-session-opts { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:10px; }
+  .og-chip { font-family:var(--mono); font-size:11.5px; border:1px solid var(--line); background:var(--surface-2); color:var(--muted); padding:5px 9px; border-radius:99px; cursor:pointer; white-space:nowrap; }
+  .og-chip:hover { border-color:var(--muted-2); color:var(--ink); }
+  .og-chip.on { border-color:var(--og-accent); color:var(--ink); }
+  .og-opt-label { font-family:var(--mono); font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted-2); }
+  .og-session-opts select, .og-session-opts input[type=number] { font-size:12.5px; padding:6px 8px; border:1px solid var(--line); border-radius:8px; background:var(--input-bg); color:var(--ink); outline:none; max-width:230px; }
+  .og-session-opts select:focus, .og-session-opts input:focus { border-color:var(--signal); }
+
+  /* the decision moment — one panel, shown once per authorisation level, never a popup loop */
+  .og-decision { margin-top:12px; border:1px solid #3B97E6; border-radius:12px; padding:12px 14px; background:rgba(59,151,230,.09); }
+  .og-decision .og-dec-title { font-size:15px; font-weight:700; color:var(--ink); }
+  .og-decision .og-dec-sub { font-family:var(--mono); font-size:12px; color:var(--muted); margin-top:3px; }
+  .og-decision .og-dec-actions { display:flex; gap:7px; flex-wrap:wrap; margin-top:10px; }
+  .og-decision .og-btn.og-dec-primary { background:#3B97E6; border-color:#3B97E6; color:#08111C; }
+  .og-decision .og-dec-secondary { font-size:11.5px; color:var(--muted-2); background:none; border:none; cursor:pointer; text-decoration:underline; padding:4px 2px; }
+  .og-decision .og-dec-secondary:hover { color:var(--ink); }
+
+  .og-stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(108px,1fr)); gap:8px; margin-top:14px; }
+  .og-stat { background:var(--surface-2); border:1px solid var(--line); border-radius:10px; padding:8px 10px; }
+  .og-stat .k { font-family:var(--mono); font-size:9.5px; letter-spacing:.11em; text-transform:uppercase; color:var(--muted-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .og-stat .v { font-family:var(--mono); font-size:16px; font-weight:700; color:var(--ink); margin-top:2px; font-variant-numeric:tabular-nums; }
+  .og-stat.productive .v { color:#23B877; } .og-stat.leisure .v { color:#3B97E6; }
+  .og-stat.autopilot .v { color:#F2A81D; } .og-stat.overrun .v { color:var(--star); }
+  .og-stat.debt .v { color:var(--signal-dim); } .og-stat.unacc .v { color:var(--muted); }
+  .og-scope { display:flex; align-items:baseline; gap:10px; margin-top:14px; flex-wrap:wrap; }
+  .og-scope .og-scope-title { font-family:var(--mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted-2); }
+  .og-scope .og-scope-note { font-family:var(--mono); font-size:11px; color:var(--muted-2); }
+  .og-foot { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:14px; padding-top:11px; border-top:1px solid var(--line); }
+  .og-disclose { font-family:var(--mono); font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); background:none; border:1px solid var(--line); border-radius:8px; padding:5px 10px; cursor:pointer; }
+  .og-disclose:hover { border-color:var(--muted-2); color:var(--ink); }
+  .og-disclose[aria-expanded=true] { border-color:var(--signal); color:var(--ink); }
+  .og-waking { margin-left:auto; font-family:var(--mono); font-size:11px; color:var(--muted-2); display:flex; align-items:center; gap:6px; }
+  .og-waking input { width:52px; font-family:var(--mono); font-size:11.5px; padding:4px 6px; border:1px solid var(--line); border-radius:7px; background:var(--input-bg); color:var(--ink); outline:none; }
+  .og-waking input:focus { border-color:var(--signal); }
+
+  .og-panel { margin-top:12px; border:1px solid var(--line); border-radius:12px; padding:12px 14px; background:var(--card); }
+  .og-panel h4 { font-family:var(--mono); font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted-2); margin:0 0 8px; font-weight:600; }
+  .og-panel h4:not(:first-child) { margin-top:14px; }
+  .og-lines { display:flex; flex-direction:column; gap:5px; }
+  .og-line { display:flex; justify-content:space-between; gap:14px; font-size:12.5px; color:var(--muted); }
+  .og-line b { font-family:var(--mono); color:var(--ink); font-weight:700; white-space:nowrap; }
+  .og-caveat { font-size:11px; color:var(--muted-2); margin-top:9px; line-height:1.45; }
+
+  .og-hist-list { display:flex; flex-direction:column; gap:6px; }
+  .og-hist-day { font-family:var(--mono); font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted-2); margin:8px 2px 1px; }
+  .og-hist-day:first-child { margin-top:0; }
+  .og-hist-row { display:flex; align-items:center; gap:9px; padding:7px 10px; border:1px solid var(--line); border-left:3px solid var(--og-row-accent,var(--line)); border-radius:9px; background:var(--surface-2); }
+  .og-hist-body { flex:1; min-width:0; }
+  .og-hist-top { display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
+  .og-hist-mode { font-size:12.5px; font-weight:700; color:var(--ink); }
+  .og-hist-dur { font-family:var(--mono); font-size:12.5px; font-weight:700; color:var(--ink); }
+  .og-hist-meta { font-family:var(--mono); font-size:11px; color:var(--muted-2); display:flex; gap:9px; flex-wrap:wrap; margin-top:2px; }
+  .og-hist-meta .og-m-over { color:var(--star); font-weight:700; }
+  .og-hist-meta .og-m-task { color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:210px; }
+  .og-hist-edit, .og-hist-del { color:var(--muted-2); background:none; border:none; cursor:pointer; font-size:13px; padding:2px 3px; flex:none; }
+  .og-hist-edit:hover { color:var(--ink); } .og-hist-del:hover { color:var(--alarm); }
+  .og-hist-more { font-size:12px; color:var(--muted); background:none; border:1px solid var(--line); border-radius:8px; padding:6px 10px; cursor:pointer; margin-top:8px; align-self:flex-start; }
+  .og-hist-more:hover { border-color:var(--muted-2); color:var(--ink); }
+  .og-editor { border:1px solid var(--signal); border-radius:9px; padding:11px; background:var(--input-bg); box-shadow:0 0 0 2px rgba(168,85,247,.1); }
+  .og-editor .og-ed-grid { display:grid; grid-template-columns:1fr 1fr; gap:9px; }
+  .og-editor .pe-field { display:flex; flex-direction:column; gap:3px; }
+  .og-editor label { font-family:var(--mono); font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); }
+  .og-editor input, .og-editor select { font-size:13px; padding:7px 9px; border:1px solid var(--line); border-radius:7px; background:var(--card); color:var(--ink); outline:none; width:100%; font-family:inherit; }
+  .og-editor input:focus, .og-editor select:focus { border-color:var(--signal); }
+  .og-editor .og-ed-wide { grid-column:1/-1; }
+  .og-editor .pe-actions { display:flex; gap:6px; justify-content:flex-end; margin-top:10px; }
+  .og-editor .og-ed-err { color:var(--alarm); font-size:11.5px; margin-top:7px; }
+
+  @media (max-width:640px){
+    .og-readout { text-align:left; min-width:0; }
+    .og-btn.og-stop { margin-left:0; }
+    .og-waking { margin-left:0; width:100%; }
+    .og-editor .og-ed-grid { grid-template-columns:1fr; }
+  }
+
   @media (max-width:640px){
     .row { grid-template-columns:24px 48px 1fr auto; grid-template-areas:"cbx pri who actions" "cbx pri title title" "cbx pri meta meta" "cbx pri status status"; row-gap:7px; }
     .row > .cbx { grid-area:cbx; } .row > .pri{ grid-area:pri; align-self:start; } .r-who{ grid-area:who; } .r-title{ grid-area:title; } .r-meta{ grid-area:meta; display:flex; gap:12px; flex-wrap:wrap;} .r-status{ grid-area:status;} .rowactions{ grid-area:actions;}
@@ -550,6 +679,39 @@
       </div>
     </div>
   </header>
+
+  <!-- THE OTHER GRIND — Tier 1 (mode, live timer, remaining authorised time, controls) sits above
+       everything else on purpose: it must be the first thing visible on opening The Grind.
+       Only the containers are static; every child is rendered by renderOtherGrind() / ogTickLive(). -->
+  <section class="og" id="og" aria-label="The Other Grind">
+    <div class="og-head">
+      <div class="og-lead">
+        <div class="og-eyebrow">The Other Grind</div>
+        <div class="og-mode" id="ogMode"></div>
+        <div class="og-sub" id="ogSub"></div>
+      </div>
+      <div class="og-readout">
+        <div class="og-timer" id="ogTimer">00:00:00</div>
+        <div class="og-remaining" id="ogRemaining"></div>
+      </div>
+    </div>
+    <div class="og-controls" id="ogControls"></div>
+    <div class="og-session-opts" id="ogSessionOpts"></div>
+    <div class="og-decision hidden" id="ogDecision" role="group" aria-label="Time reached"></div>
+
+    <div class="og-scope"><span class="og-scope-title">Today</span><span class="og-scope-note" id="ogTodayRatio"></span></div>
+    <div class="og-stats" id="ogTodayStats"></div>
+    <div class="og-scope"><span class="og-scope-title">This week</span><span class="og-scope-note" id="ogWeekRatio"></span></div>
+    <div class="og-stats" id="ogWeekStats"></div>
+
+    <div class="og-foot">
+      <button class="og-disclose" id="ogPaceToggle" aria-expanded="false" aria-controls="ogPacePanel">At this pace</button>
+      <button class="og-disclose" id="ogHistToggle" aria-expanded="false" aria-controls="ogHistPanel">History</button>
+      <label class="og-waking">Waking day <input type="number" id="ogWaking" min="1" max="24" step="0.5" aria-label="Estimated waking hours per day"> h</label>
+    </div>
+    <div class="og-panel hidden" id="ogPacePanel"></div>
+    <div class="og-panel hidden" id="ogHistPanel"></div>
+  </section>
 
   <div class="nextup empty" id="nextup"></div>
 
@@ -754,7 +916,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script>
 "use strict";
-const VERSION = "1.0-beta";
+const VERSION = "1.1-beta";
 
 /* ---------------- storage ---------------- */
 /* Grind-namespaced keys — deliberately isolated from the old Family Planner fork's `home.*`
@@ -849,6 +1011,13 @@ function initSync(){
       if(typeof v.beforeYouLeaveTitle==="string" && v.beforeYouLeaveTitle.trim()!=="") bylTitle=normalizeBYLTitle(v.beforeYouLeaveTitle);  // malformed/blank remote titles must never overwrite the local title
       if(Array.isArray(v.words)) words=v.words.map(migrateWordEntry).filter(Boolean); // same rule → an older payload with no words field never erases local Word Lab data
       if(Array.isArray(v.vault)) vault=v.vault.map(migrateVaultEntry).filter(Boolean); // same rule → an older payload with no vault field never erases local Vault data
+      if(Array.isArray(v.otherGrindSessions)) ogSessions=v.otherGrindSessions.map(ogMigrateSession).filter(Boolean).sort((a,b)=>a.startTimestamp-b.startTimestamp); // same rule → an older payload never erases session history
+      /* The active session is the one field where ABSENCE can't mean "leave it alone": stopping a
+         session on another device has to be able to clear this one. Hence the explicit
+         {mode:"idle"} sentinel — undefined still means "an older client wrote this payload". */
+      { const inc=ogParseActive(v.otherGrindActive); if(inc!==undefined){ ogActive=inc; ogDecisionShownFor=null; } }
+      if(v.otherGrindSettings && typeof v.otherGrindSettings==="object"){ const wh=Number(v.otherGrindSettings.wakingHours); if(Number.isFinite(wh)&&wh>0&&wh<=24) ogSettings.wakingHours=wh; }
+      try{ localStorage.setItem(K_OG_SESSIONS,JSON.stringify(ogSessions)); localStorage.setItem(K_OG_ACTIVE,JSON.stringify(ogActivePayload())); localStorage.setItem(K_OG_SETTINGS,JSON.stringify(ogSettings)); }catch(e){}
       try{ localStorage.setItem(K_PEOPLE,JSON.stringify(people)); localStorage.setItem(K_TASKS,JSON.stringify(tasks)); localStorage.setItem(K_SHOP,JSON.stringify(shop)); localStorage.setItem(K_PLACES,JSON.stringify(places)); localStorage.setItem(K_DATES,JSON.stringify(importantDates)); localStorage.setItem(K_BILLS,JSON.stringify(bills)); localStorage.setItem(K_NOTES,JSON.stringify(notes)); localStorage.setItem(K_BYL,JSON.stringify(beforeYouLeave)); localStorage.setItem(K_BYL_TITLE,JSON.stringify(bylTitle)); localStorage.setItem(K_WORDS,JSON.stringify(words)); localStorage.setItem(K_VAULT,JSON.stringify(vault)); }catch(e){}
       remoteApplying=false;
       // Repair push happens strictly after remoteApplying is reset, so it goes through the normal
@@ -870,7 +1039,7 @@ function pushCloud(force){
      Since a stale v1.4 tab's set() has no importantDates key, its set() would still erase importantDates
      (update() only protects against writers that also use update() with a partial payload); this change
      protects future fields added the same way, but v1.4 tabs must still be closed/refreshed — see report. */
-  pushTimer=setTimeout(()=>{ try{ db.update({people,tasks,shop,places,importantDates,bills,notes,beforeYouLeave,beforeYouLeaveTitle:bylTitle,words,vault,updated:Date.now()}); }catch(e){} }, 250);
+  pushTimer=setTimeout(()=>{ try{ db.update({people,tasks,shop,places,importantDates,bills,notes,beforeYouLeave,beforeYouLeaveTitle:bylTitle,words,vault,otherGrindSessions:ogSessions,otherGrindActive:ogActivePayload(),otherGrindSettings:ogSettings,updated:Date.now()}); }catch(e){} }, 250);
 }
 function updateSyncBadge(on){
   const el=document.getElementById("syncBadge"); if(!el) return;
@@ -1257,6 +1426,227 @@ let words = loadWords();
 let vault = loadVault();
 let settings = Object.assign({ soundEnabled:true }, loadJSON(K_SETTINGS)||{});
 
+/* =====================================================================
+   THE OTHER GRIND — state + calculation engine
+   A behavioural time-awareness tracker: it reports, it never punishes.
+   Nothing in here locks a feature, breaks a streak, deducts anything, or
+   classifies an activity as good or bad — the mode is always the user's
+   own declaration about their intention, never inferred from what they
+   are doing (see "no moral classification" in the blueprint).
+
+   Three tracked modes plus idle:
+     productive  — deliberately spent on responsibilities/goals
+     leisure     — deliberately spent on something enjoyable, optionally
+                   inside an explicitly authorised time window
+     autopilot   — time the user says is no longer being actively chosen
+
+   Overrun is time past the *explicitly authorised* window. Pressing +15/+30
+   is a conscious recommitment, so it raises the authorisation and therefore
+   produces NO overrun — extending is a success state, not a failure.
+
+   Every function below ogSaveOther* is pure (no DOM, no globals beyond the
+   constants here): totals are always derived from the stored sessions, never
+   accumulated into running counters, so editing or deleting a session can
+   never leave a stale total behind.
+   ===================================================================== */
+const K_OG_SESSIONS="grind.og.sessions.v1", K_OG_ACTIVE="grind.og.active.v1", K_OG_SETTINGS="grind.og.settings.v1";
+const OG_MIN=60000, OG_HOUR=3600000;
+const OG_MODES=["productive","leisure","autopilot"];
+const OG_MODE_META={
+  productive:{ label:"Productive", short:"Productive", color:"#23B877", taskLabel:"Working on" },
+  leisure:   { label:"Intentional Leisure", short:"Leisure", color:"#3B97E6", taskLabel:"Instead of" },
+  autopilot: { label:"Autopilot", short:"Autopilot", color:"#F2A81D", taskLabel:"Instead of" }
+};
+const OG_DEFAULT_WAKING_HOURS=16;
+const OG_DURATION_CHOICES=[15,30,45,60];
+
+/* ---- local calendar boundaries (built from Date parts, never ts±86400000,
+        so DST-shifted days are still exactly one day) ---- */
+function ogDayStart(ts){ const d=new Date(ts); return new Date(d.getFullYear(),d.getMonth(),d.getDate()).getTime(); }
+function ogAddDays(ts,n){ const d=new Date(ts); d.setDate(d.getDate()+n); return d.getTime(); }
+function ogDayEnd(ts){ return ogAddDays(ogDayStart(ts),1); }
+/* Reporting week runs Monday → Sunday. getDay() is 0=Sun..6=Sat, so the offset back to Monday is
+   (getDay()+6)%7 — which maps Sunday to 6, keeping Sunday at the END of its week rather than the start. */
+function ogWeekStart(ts){ const d=new Date(ogDayStart(ts)); return ogAddDays(d.getTime(), -((d.getDay()+6)%7)); }
+function ogWeekEnd(ts){ return ogAddDays(ogWeekStart(ts),7); }
+/* Whole local days spanned by [from,to) — used for the waking-time budget behind Unaccounted. */
+function ogDayCount(from,to){ let n=0, cur=ogDayStart(from); while(cur<to){ n++; cur=ogAddDays(cur,1); } return Math.max(1,n); }
+
+function ogBlankSession(mode){
+  const now=Date.now();
+  return { id:uid("og"), mode:OG_MODES.includes(mode)?mode:"productive",
+    startTimestamp:now, endTimestamp:null, actualDuration:0,
+    initialAuthorizedDuration:null,   // ms; leisure only. null = deliberately unbounded, not "zero authorised"
+    extensions:[],                    // [{timestamp,duration}] — kept structured so one 90m decision stays distinguishable from three 30m ones
+    extensionDuration:0, totalAuthorizedDuration:null, overrunDuration:0,
+    insteadOfTaskId:"", insteadOfTaskNameSnapshot:"", note:"",
+    source:"manual", wasEdited:false, decisionCount:0,
+    createdAt:now, updatedAt:now };
+}
+/* Derived fields are stored (the blueprint lists them on the record) but ALWAYS recomputed from the
+   primitives on every write, load, and edit — so a hand-edited session can never carry a stale
+   overrun/duration forward into the dashboards. */
+function ogRecompute(s, nowTs){
+  const now=Number.isFinite(nowTs)?nowTs:Date.now();
+  const end=(s.endTimestamp!=null)?s.endTimestamp:now;
+  s.actualDuration=Math.max(0,end-s.startTimestamp);
+  s.extensionDuration=(s.extensions||[]).reduce((a,x)=>a+Math.max(0,Number.isFinite(x&&x.duration)?x.duration:0),0);
+  if(s.mode==="leisure" && Number.isFinite(s.initialAuthorizedDuration)){
+    s.totalAuthorizedDuration=Math.max(0,s.initialAuthorizedDuration)+s.extensionDuration;
+    s.overrunDuration=Math.max(0,s.actualDuration-s.totalAuthorizedDuration);
+  } else {
+    /* Productive and Autopilot have no authorised window to exceed, and unbounded leisure was never
+       given one — none of them can produce an overrun. Autopilot is already counted in full as
+       unchosen discretionary time below, so charging it an "overrun" too would double-count it. */
+    s.totalAuthorizedDuration=null; s.overrunDuration=0;
+  }
+  return s;
+}
+/* Total authorised time for a session, or null when it was never bounded. Pure — the dashboards
+   call this instead of trusting the stored totalAuthorizedDuration. */
+function ogAuthorizedMs(s){
+  if(!s || s.mode!=="leisure" || !Number.isFinite(s.initialAuthorizedDuration)) return null;
+  return Math.max(0,s.initialAuthorizedDuration)+(s.extensions||[]).reduce((a,x)=>a+Math.max(0,Number.isFinite(x&&x.duration)?x.duration:0),0);
+}
+function ogEffectiveEnd(s, nowTs){ return (s && s.endTimestamp!=null) ? s.endTimestamp : (Number.isFinite(nowTs)?nowTs:Date.now()); }
+
+/* Rebuilt defensively from whatever is on disk / in the cloud: a malformed session is dropped
+   rather than allowed to throw, and anything salvageable is repaired in place. */
+function ogMigrateSession(raw){
+  if(!raw || typeof raw!=="object" || !Number.isFinite(raw.startTimestamp)) return null;
+  const s=ogBlankSession(raw.mode);
+  s.id=(typeof raw.id==="string" && raw.id.trim()!=="")?raw.id:uid("og");
+  s.mode=OG_MODES.includes(raw.mode)?raw.mode:"productive";
+  s.startTimestamp=raw.startTimestamp;
+  s.endTimestamp=Number.isFinite(raw.endTimestamp)?Math.max(raw.endTimestamp,raw.startTimestamp):null;
+  s.initialAuthorizedDuration=Number.isFinite(raw.initialAuthorizedDuration)?Math.max(0,raw.initialAuthorizedDuration):null;
+  s.extensions=Array.isArray(raw.extensions)
+    ? raw.extensions.filter(x=>x&&Number.isFinite(x.duration)&&x.duration>0)
+        .map(x=>({ timestamp:Number.isFinite(x.timestamp)?x.timestamp:s.startTimestamp, duration:Math.max(0,x.duration) }))
+    : [];
+  /* A flat legacy/partial payload that only kept the extension TOTAL still reconstructs a usable
+     (if less granular) history rather than silently losing the authorisation. */
+  if(!s.extensions.length && Number.isFinite(raw.extensionDuration) && raw.extensionDuration>0)
+    s.extensions=[{ timestamp:s.startTimestamp, duration:raw.extensionDuration }];
+  s.insteadOfTaskId=typeof raw.insteadOfTaskId==="string"?raw.insteadOfTaskId:"";
+  s.insteadOfTaskNameSnapshot=typeof raw.insteadOfTaskNameSnapshot==="string"?raw.insteadOfTaskNameSnapshot:"";
+  s.note=typeof raw.note==="string"?raw.note:"";
+  s.source=typeof raw.source==="string"&&raw.source?raw.source:"manual";
+  s.wasEdited=!!raw.wasEdited;
+  s.decisionCount=Number.isFinite(raw.decisionCount)?raw.decisionCount:0;
+  s.createdAt=Number.isFinite(raw.createdAt)?raw.createdAt:s.startTimestamp;
+  s.updatedAt=Number.isFinite(raw.updatedAt)?raw.updatedAt:s.createdAt;
+  return ogRecompute(s);
+}
+function ogLoadSessions(){ const raw=loadJSON(K_OG_SESSIONS); if(!Array.isArray(raw)) return []; return raw.map(ogMigrateSession).filter(Boolean).sort((a,b)=>a.startTimestamp-b.startTimestamp); }
+/* The active session is stored/synced as an explicit record with an "idle" sentinel rather than as
+   a missing key: absence has to keep meaning "an older client wrote this payload" (leave it alone),
+   while {mode:"idle"} means "a session really did end" — otherwise stopping on one device could
+   never propagate the stop to another. Returns undefined for "no OG-aware value present". */
+function ogParseActive(raw){
+  if(!raw || typeof raw!=="object") return undefined;
+  if(raw.mode==="idle") return null;
+  return ogMigrateSession(raw);
+}
+function ogActivePayload(){ return ogActive ? Object.assign({},ogActive,{updated:Date.now()}) : { mode:"idle", updated:Date.now() }; }
+function ogLoadSettings(){
+  const raw=loadJSON(K_OG_SETTINGS)||{};
+  const wh=Number(raw.wakingHours);
+  return { wakingHours:(Number.isFinite(wh)&&wh>0&&wh<=24)?wh:OG_DEFAULT_WAKING_HOURS };
+}
+
+let ogSessions=ogLoadSessions();
+let ogActive=(function(){ const p=ogParseActive(loadJSON(K_OG_ACTIVE)); return p||null; })();
+let ogSettings=ogLoadSettings();
+/* Which total-authorised value the decision panel has already been surfaced for. Extending raises
+   the authorisation, which re-arms exactly one further decision point — the panel never re-fires
+   for a window the user has already answered, so there is no nagging loop. */
+let ogDecisionShownFor=null;
+let ogPaceOpen=false, ogHistoryOpen=false, ogHistoryLimit=25, ogEditSessionId=null, ogEditError="";
+
+function ogSaveSessions(){ try{ localStorage.setItem(K_OG_SESSIONS, JSON.stringify(ogSessions)); }catch(e){} pushCloud(); }
+function ogSaveActive(){ try{ localStorage.setItem(K_OG_ACTIVE, JSON.stringify(ogActivePayload())); }catch(e){} pushCloud(); }
+function ogSaveSettings(){ try{ localStorage.setItem(K_OG_SETTINGS, JSON.stringify(ogSettings)); }catch(e){} pushCloud(); }
+
+/* ---- pure reporting engine ----
+   Every total is an OVERLAP against an explicit [from,to) window rather than a whole-session sum,
+   so a session that crosses midnight or the week boundary stays one session on disk while its
+   duration lands on the correct day/week. The overrun portion is attributed to when it actually
+   happened — the stretch after the authorised window closed — not to the session's start day. */
+function ogOverlap(aStart,aEnd,bStart,bEnd){ return Math.max(0, Math.min(aEnd,bEnd)-Math.max(aStart,bStart)); }
+function ogTotals(sessions, from, to, nowTs){
+  const now=Number.isFinite(nowTs)?nowTs:Date.now();
+  const t={ productive:0, leisure:0, autopilot:0, overrun:0, unboundedLeisure:0, sessionCount:0 };
+  (sessions||[]).forEach(s=>{
+    if(!s || !Number.isFinite(s.startTimestamp)) return;
+    const end=ogEffectiveEnd(s,now);
+    if(end<=from || s.startTimestamp>=to) return;
+    t.sessionCount++;
+    if(s.mode==="productive"){ t.productive+=ogOverlap(s.startTimestamp,end,from,to); return; }
+    if(s.mode==="autopilot"){ t.autopilot+=ogOverlap(s.startTimestamp,end,from,to); return; }
+    const auth=ogAuthorizedMs(s);
+    if(auth==null){ const ms=ogOverlap(s.startTimestamp,end,from,to); t.leisure+=ms; t.unboundedLeisure+=ms; return; }
+    const authClose=s.startTimestamp+auth;
+    t.leisure+=ogOverlap(s.startTimestamp,Math.min(end,authClose),from,to);
+    if(end>authClose) t.overrun+=ogOverlap(authClose,end,from,to);
+  });
+  /* `leisure` is leisure the user stayed inside their own intention for (bounded time up to the
+     authorisation, plus unbounded sessions in full); overrun is reported beside it, never inside
+     it, so the four tracked buckets add up to `tracked` with nothing double-counted. */
+  t.tracked=t.productive+t.leisure+t.autopilot+t.overrun;
+  t.timeDebt=t.autopilot+t.overrun;                    // informational only — never repaid, never carried into tomorrow
+  t.discretionary=t.leisure+t.autopilot+t.overrun;     // ALL discretionary time, bounded or not
+  /* Conscious-Time measures only discretionary time an authorisation boundary actually existed for.
+     Unbounded leisure is still legitimate Intentional Leisure — zero overrun, zero Time Debt — but
+     there was no boundary to keep or miss, so counting it either way would be a claim the data
+     cannot support: it is excluded from BOTH sides of the ratio rather than scored as a success.
+     `unboundedLeisure` is kept as its own figure so that time is never lost, only set aside. */
+  t.boundedLeisure=Math.max(0, t.leisure-t.unboundedLeisure);
+  t.measuredDiscretionary=t.boundedLeisure+t.autopilot+t.overrun;
+  t.consciousPct=t.measuredDiscretionary>0 ? (t.boundedLeisure/t.measuredDiscretionary) : null;
+  return t;
+}
+/* Unaccounted is deliberately never classified. A large figure means the tracker is missing
+   behaviour, which is information about the tracking — not an accusation about the time. */
+function ogUnaccounted(trackedMs, wakingHours, days){ return Math.max(0, wakingHours*OG_HOUR*days - trackedMs); }
+function ogRatioText(productiveMs, autopilotMs){
+  if(autopilotMs<=0) return productiveMs>0 ? "No Autopilot recorded" : "Nothing recorded yet";
+  if(productiveMs<=0) return "No Productive time recorded";
+  return "Productive : Autopilot — 1 : "+(autopilotMs/productiveMs).toFixed(2);
+}
+/* Trailing average daily Time Debt over the last `days` COMPLETE days plus today, used for the
+   projection. Returns null until there is at least one day of data to average. */
+function ogTrailingDebtPerDay(sessions, days, nowTs){
+  const now=Number.isFinite(nowTs)?nowTs:Date.now();
+  const to=ogDayEnd(now), from=ogAddDays(ogDayStart(now),-(days-1));
+  const earliest=(sessions||[]).reduce((m,s)=>(s&&Number.isFinite(s.startTimestamp)&&s.startTimestamp<m)?s.startTimestamp:m, Infinity);
+  if(!Number.isFinite(earliest)) return null;
+  /* Averaging over days that predate the very first session would understate the pace, so the
+     window never reaches back further than the day tracking actually started. */
+  const windowFrom=Math.max(from, ogDayStart(earliest));
+  const n=ogDayCount(windowFrom,to);
+  return ogTotals(sessions, windowFrom, to, now).timeDebt / n;
+}
+
+/* ---- formatting ---- */
+function ogFmtDur(ms){
+  const total=Math.max(0,Math.round(ms/OG_MIN));
+  const h=Math.floor(total/60), m=total%60;
+  if(h && m) return `${h}h ${m}m`;
+  if(h) return `${h}h`;
+  return `${m}m`;
+}
+function ogFmtClock(ms){
+  const total=Math.max(0,Math.floor(ms/1000));
+  return `${pad2(Math.floor(total/3600))}:${pad2(Math.floor(total/60)%60)}:${pad2(total%60)}`;
+}
+function ogFmtHours(ms){ return (ms/OG_HOUR).toFixed(1)+"h"; }
+/* Plain equivalents, always shown next to the underlying hours so nothing is inflated by framing. */
+function ogEquivalents(ms, wakingHours){
+  const h=ms/OG_HOUR;
+  return { hours:h, workdays:h/8, fullDays:h/24, wakingDays:h/Math.max(1,wakingHours) };
+}
+
 /* ---------------- state ---------------- */
 let editingId=null, placeEditingId=null, dateEditingId=null, billEditingId=null, overdueSet=new Set();
 let datesAllOpen=false, pastDatesOpen=false;
@@ -1264,7 +1654,7 @@ let pendingRemoteRender=false;
 /* Shared inline-edit / popover tracker (text fields + people/category/date-time/priority popovers).
    Only one of these may be open at a time; opening a new one commits/closes whatever is open. */
 let activeEdit=null; // { type, id, field, close(cancel) }
-function editingActive(){ return editingId!=null || placeEditingId!=null || dateEditingId!=null || billEditingId!=null || !!activeEdit; }
+function editingActive(){ return editingId!=null || placeEditingId!=null || dateEditingId!=null || billEditingId!=null || ogEditSessionId!=null || !!activeEdit; }
 
 /* =====================================================================
    SHARED INLINE-EDIT / POPOVER SYSTEM
@@ -1625,6 +2015,7 @@ function currentCombinedView(){
 
 function render(){
   normalizeLater();
+  renderOtherGrind();
   renderPeopleBar();
   renderPresetBar();
   renderNotes();
@@ -3074,7 +3465,10 @@ document.getElementById("printBtn").addEventListener("pointerdown",e=>{
 });
 document.getElementById("printBtn").addEventListener("click",openPrintCenter);
 document.getElementById("exportBtn").addEventListener("click",()=>{
-  const bundle={version:VERSION,people,tasks,shop,places,importantDates,bills,notes,beforeYouLeave,beforeYouLeaveTitle:bylTitle,words,vault};
+  /* The Other Grind's session history and waking-hours setting travel with the backup; the ACTIVE
+     session deliberately does not — restoring a file should never resurrect a live running timer
+     from whenever the export was taken, nor clobber a session running right now. */
+  const bundle={version:VERSION,people,tasks,shop,places,importantDates,bills,notes,beforeYouLeave,beforeYouLeaveTitle:bylTitle,words,vault,otherGrindSessions:ogSessions,otherGrindSettings:ogSettings};
   const blob=new Blob([JSON.stringify(bundle,null,2)],{type:"application/json"});
   const url=URL.createObjectURL(blob); const a=document.createElement("a");
   a.href=url; a.download=`the-grind-${new Date().toISOString().slice(0,10)}.json`; a.click(); URL.revokeObjectURL(url);
@@ -3104,8 +3498,11 @@ document.getElementById("importFile").addEventListener("change",e=>{
       if(typeof d.beforeYouLeaveTitle==="string" && d.beforeYouLeaveTitle.trim()!=="") bylTitle=normalizeBYLTitle(d.beforeYouLeaveTitle);
       if(Array.isArray(d.words)) words=d.words.map(migrateWordEntry).filter(Boolean);
       if(Array.isArray(d.vault)) vault=d.vault.map(migrateVaultEntry).filter(Boolean);
+      if(Array.isArray(d.otherGrindSessions)) ogSessions=d.otherGrindSessions.map(ogMigrateSession).filter(Boolean).sort((a,b)=>a.startTimestamp-b.startTimestamp);
+      if(d.otherGrindSettings && typeof d.otherGrindSettings==="object"){ const wh=Number(d.otherGrindSettings.wakingHours); if(Number.isFinite(wh)&&wh>0&&wh<=24) ogSettings.wakingHours=wh; }
+      /* d.otherGrindActive is intentionally ignored — see the export comment above. */
     }
-    editingId=null; placeEditingId=null; dateEditingId=null; billEditingId=null; savePeople(); saveTasks(); saveShop(); savePlaces(); saveDates(); saveBills(); saveNotes(); saveBYL(); saveBYLTitle(); saveWords(); saveVault(); render();
+    editingId=null; placeEditingId=null; dateEditingId=null; billEditingId=null; ogEditSessionId=null; savePeople(); saveTasks(); saveShop(); savePlaces(); saveDates(); saveBills(); saveNotes(); saveBYL(); saveBYLTitle(); saveWords(); saveVault(); ogSaveSessions(); ogSaveSettings(); render();
   }catch(err){ alert("Couldn't read that file — expected a The Grind export (.json)."); } };
   r.readAsText(f); e.target.value="";
 });
@@ -3391,8 +3788,506 @@ window.addEventListener("afterprint", ()=>{
   if(fallbackSheet) fallbackSheet.remove();
 });
 
+/* =====================================================================
+   THE OTHER GRIND — actions, rendering, wiring
+   Only one session can be active at a time, and it lives entirely in
+   timestamps: the displayed timer is always derived from
+   (now - startTimestamp), never from an incrementing counter, so a
+   refresh, a browser restart, or a laptop waking from sleep all
+   reconstruct the correct elapsed time rather than losing or inventing it.
+   ===================================================================== */
+function ogSessionsWithActive(){ return ogActive ? ogSessions.concat([ogActive]) : ogSessions; }
+function ogModeMeta(mode){ return OG_MODE_META[mode] || { label:"Idle", short:"Idle", color:"var(--muted-2)", taskLabel:"About" }; }
+
+/* Ends the running session at an exact instant and files it into history. Callers that are
+   switching modes pass the SAME timestamp they then start the next session with, so switching can
+   never open a gap or overlap between the two records. */
+function ogEndActive(atTs){
+  if(!ogActive) return null;
+  const end=Math.max(Number.isFinite(atTs)?atTs:Date.now(), ogActive.startTimestamp);
+  const s=ogActive;
+  s.endTimestamp=end; s.updatedAt=Date.now();
+  ogRecompute(s);
+  ogActive=null; ogDecisionShownFor=null;
+  /* A sub-second session is a mis-tap on the mode buttons, not behaviour worth recording. Nothing
+     longer is ever discarded, trimmed, or reclassified — history stays exactly as it happened. */
+  if(s.actualDuration<1000) return null;
+  ogSessions.push(s);
+  ogSessions.sort((a,b)=>a.startTimestamp-b.startTimestamp);
+  ogSaveSessions();
+  return s;
+}
+/* decisionCount = how many explicit decisions the user answered at an EXPIRED authorisation
+   boundary. Every route out of that moment counts once — +15, +30, I'M DONE, Switch to Autopilot —
+   because each is the same act: consciously resolving a window that has run out. Ordinary controls
+   pressed while nothing has expired are not decisions and never increment it, which is why this is
+   gated on ogDecisionDue() rather than on which button was clicked.
+   It MUST run before ogEndActive() files the session, so the decision is recorded against the
+   leisure session it actually resolved rather than being lost with the live record. */
+function ogRecordDecision(){
+  if(!ogActive || !ogDecisionDue()) return;
+  ogActive.decisionCount=(ogActive.decisionCount||0)+1;
+  ogActive.updatedAt=Date.now();
+}
+function ogStartMode(mode){
+  if(!OG_MODES.includes(mode)) return;
+  const now=Date.now();
+  if(ogActive && ogActive.mode===mode) return;   // pressing the current mode again must not restart its timer
+  if(ogActive){ ogRecordDecision(); ogEndActive(now); }
+  const s=ogBlankSession(mode);
+  s.startTimestamp=now; s.createdAt=now; s.updatedAt=now;
+  ogRecompute(s,now);
+  ogActive=s; ogDecisionShownFor=null;
+  ogSaveActive(); renderOtherGrind();
+}
+function ogStop(){
+  if(!ogActive) return;
+  ogRecordDecision();
+  ogEndActive(Date.now());
+  ogSaveActive();            // writes the explicit idle sentinel so other devices see the stop
+  renderOtherGrind();
+}
+/* The duration picker never touches startTimestamp — the session began the moment the mode button
+   was pressed, and the authorised window is always measured from that instant
+   (planned_end = start + authorised), however long the user took to choose. */
+function ogSetPlannedDuration(minutes){
+  if(!ogActive || ogActive.mode!=="leisure") return;
+  ogActive.initialAuthorizedDuration = (minutes==null) ? null : Math.max(0,Math.round(minutes))*OG_MIN;
+  ogActive.extensions=[];    // re-planning replaces the window rather than stacking onto the old one
+  ogActive.updatedAt=Date.now();
+  ogRecompute(ogActive);
+  ogDecisionShownFor=null;
+  ogSaveActive(); renderOtherGrind();
+}
+/* Pressing +15 / +30 is a conscious recommitment, so it RAISES the authorised total. The extra time
+   is authorised intentional leisure — it is not an overrun and not a failure. */
+function ogExtend(minutes){
+  if(!ogActive || ogActive.mode!=="leisure" || !Number.isFinite(ogActive.initialAuthorizedDuration)) return;
+  const now=Date.now();
+  ogRecordDecision();        // strictly before the extension lands — pushing it clears ogDecisionDue()
+  ogActive.extensions.push({ timestamp:now, duration:Math.max(0,Math.round(minutes))*OG_MIN });
+  ogActive.updatedAt=now;
+  ogRecompute(ogActive,now);
+  ogDecisionShownFor=null;   // re-arms exactly one decision point at the new total, never a loop
+  ogSaveActive(); renderOtherGrind();
+}
+/* The task NAME is snapshotted at association time, so renaming or deleting the Grind task later
+   leaves the historical session perfectly readable. The id is kept only for future analysis. */
+function ogSetInsteadOf(taskId){
+  if(!ogActive) return;
+  const t=taskId ? tasks.find(x=>x.id===taskId) : null;
+  ogActive.insteadOfTaskId=t?t.id:"";
+  ogActive.insteadOfTaskNameSnapshot=t?(t.task||""):"";
+  ogActive.updatedAt=Date.now();
+  ogSaveActive(); renderOtherGrind();
+}
+function ogDecisionDue(){
+  if(!ogActive || ogActive.mode!=="leisure") return false;
+  const auth=ogAuthorizedMs(ogActive);
+  return auth!=null && Date.now()>=ogActive.startTimestamp+auth;
+}
+function ogAmbientLevel(){
+  /* Ambient escalation is about DISCRETIONARY time only — a long productive session is not
+     something the interface should start leaning on. */
+  if(!ogActive || ogActive.mode==="productive") return 0;
+  if(ogDecisionDue()) return 3;
+  const el=Date.now()-ogActive.startTimestamp;
+  if(el>=90*OG_MIN) return 3;
+  if(el>=45*OG_MIN) return 2;
+  if(el>=20*OG_MIN) return 1;
+  return 0;
+}
+/* Distinct from the task-completion chime: a soft two-tone FALL, quieter, played exactly once per
+   authorisation level. Honours the same device-local Sound setting and fails silently. */
+function ogPlayDecisionSound(){
+  if(!settings.soundEnabled) return;
+  try{
+    if(!audioCtx){ const AC=window.AudioContext||window.webkitAudioContext; if(!AC) return; audioCtx=new AC(); }
+    if(audioCtx.state==="suspended") audioCtx.resume().catch(()=>{});
+    const now=audioCtx.currentTime;
+    const gain=audioCtx.createGain();
+    gain.connect(audioCtx.destination);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.13, now+0.03);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now+0.75);
+    [587.33, 440.00].forEach((freq,i)=>{      // D5 → A4
+      const osc=audioCtx.createOscillator();
+      osc.type="sine"; osc.frequency.value=freq;
+      osc.connect(gain);
+      const start=now+i*0.20;
+      osc.start(start); osc.stop(start+0.45);
+    });
+  }catch(e){ /* audio unavailable or blocked — never blocks the decision panel itself */ }
+}
+
+function ogFmtRemaining(ms){
+  const total=Math.max(0,Math.floor(ms/1000));
+  const h=Math.floor(total/3600), m=Math.floor(total/60)%60, s=total%60;
+  return h ? `${h}:${pad2(m)}:${pad2(s)}` : `${m}:${pad2(s)}`;
+}
+function ogInsteadOfText(s){
+  if(!s || !s.insteadOfTaskNameSnapshot) return "";
+  return `${ogModeMeta(s.mode).taskLabel}: ${s.insteadOfTaskNameSnapshot}`;
+}
+
+/* ---- Tier 1: live readout ---- */
+function ogRenderLive(){
+  const root=document.getElementById("og"); if(!root) return;
+  const meta=ogModeMeta(ogActive&&ogActive.mode);
+  root.style.setProperty("--og-accent", ogActive?meta.color:"var(--muted-2)");
+  root.classList.toggle("og-running", !!ogActive);
+  const amb=ogAmbientLevel();
+  for(let i=1;i<=3;i++) root.classList.toggle("og-amb-"+i, amb===i);
+
+  const modeEl=document.getElementById("ogMode");
+  modeEl.innerHTML = ogActive
+    ? `<span class="og-dot"></span>${esc(meta.label.toUpperCase())}`
+    : `<span class="og-dot"></span>NOT TRACKING`;
+
+  const sub=[];
+  if(ogActive){
+    const auth=ogAuthorizedMs(ogActive);
+    if(ogActive.mode==="leisure"){
+      if(Number.isFinite(ogActive.initialAuthorizedDuration)) sub.push(`Planned: ${ogFmtDur(ogActive.initialAuthorizedDuration)}`);
+      if(auth!=null && auth!==ogActive.initialAuthorizedDuration) sub.push(`Authorised: ${ogFmtDur(auth)}`);
+      if(auth==null) sub.push("No planned duration");
+    }
+    if(ogActive.overrunDuration>0) sub.push(`<span class="og-over">Overrun: ${ogFmtDur(ogActive.overrunDuration)}</span>`);
+    const io=ogInsteadOfText(ogActive); if(io) sub.push(esc(io));
+    sub.push(`Started ${fmt12(pad2(new Date(ogActive.startTimestamp).getHours())+":"+pad2(new Date(ogActive.startTimestamp).getMinutes()))}`);
+  } else {
+    sub.push("Because somehow it’s been three hours.");
+  }
+  /* Each fragment gets its own element: .og-sub is a flex row, and contiguous bare text would
+     collapse into a single anonymous flex item, losing every gap between the fragments. */
+  document.getElementById("ogSub").innerHTML=sub.map(x=>`<span>${x}</span>`).join("");
+
+  ogRenderClock();
+}
+/* Text-only update, safe to run every second and safe to run while an editor is open elsewhere:
+   it never rebuilds a container, it only writes into two leaf nodes. */
+function ogRenderClock(){
+  const timerEl=document.getElementById("ogTimer"), remEl=document.getElementById("ogRemaining");
+  if(!timerEl||!remEl) return;
+  if(!ogActive){ timerEl.textContent="00:00:00"; remEl.textContent=""; remEl.className="og-remaining"; return; }
+  const now=Date.now();
+  ogRecompute(ogActive, now);
+  timerEl.textContent=ogFmtClock(now-ogActive.startTimestamp);
+  const auth=ogAuthorizedMs(ogActive);
+  if(auth==null){ remEl.textContent = ogActive.mode==="leisure" ? "UNBOUNDED SESSION" : ""; remEl.className="og-remaining"; return; }
+  const left=(ogActive.startTimestamp+auth)-now;
+  if(left>0){ remEl.textContent=`${ogFmtRemaining(left)} AUTHORISED LEFT`; remEl.className="og-remaining"+(left<=5*OG_MIN?" low":""); }
+  else { remEl.textContent=`OVER BY ${ogFmtDur(-left)}`; remEl.className="og-remaining spent"; }
+}
+function ogRenderControls(){
+  const el=document.getElementById("ogControls"); if(!el) return;
+  let html=OG_MODES.map(m=>{
+    const on=ogActive&&ogActive.mode===m;
+    return `<button class="og-btn${on?" on":""}" data-mode="${m}" aria-pressed="${!!on}">${esc(OG_MODE_META[m].short.toUpperCase())}</button>`;
+  }).join("");
+  if(ogActive) html+=`<button class="og-btn og-stop" id="ogStopBtn">■ STOP</button>`;
+  el.innerHTML=html;
+  el.querySelectorAll(".og-btn[data-mode]").forEach(b=>b.addEventListener("click",()=>ogStartMode(b.dataset.mode)));
+  const stop=document.getElementById("ogStopBtn"); if(stop) stop.addEventListener("click",ogStop);
+}
+/* Duration picker + "instead of" association. Both are optional and neither ever blocks or delays
+   the session that is already running. */
+function ogRenderSessionOpts(){
+  const el=document.getElementById("ogSessionOpts"); if(!el) return;
+  if(!ogActive){ el.innerHTML=""; return; }
+  let html="";
+  if(ogActive.mode==="leisure"){
+    const planned=Number.isFinite(ogActive.initialAuthorizedDuration)?Math.round(ogActive.initialAuthorizedDuration/OG_MIN):null;
+    html+=`<span class="og-opt-label">Intend</span>`;
+    html+=OG_DURATION_CHOICES.map(m=>`<button class="og-chip${planned===m?" on":""}" data-dur="${m}">${m}m</button>`).join("");
+    const isCustom=planned!=null && !OG_DURATION_CHOICES.includes(planned);
+    html+=`<button class="og-chip${isCustom?" on":""}" data-dur="custom">${isCustom?esc(planned+"m")+" ·":""} Custom</button>`;
+    html+=`<button class="og-chip${planned==null?" on":""}" data-dur="none">No set duration</button>`;
+  }
+  const meta=ogModeMeta(ogActive.mode);
+  const opts=tasks.filter(isActive).map(t=>`<option value="${esc(t.id)}"${ogActive.insteadOfTaskId===t.id?" selected":""}>${esc(t.task||"(untitled)")}</option>`).join("");
+  html+=`<span class="og-opt-label">${esc(meta.taskLabel)}</span><select id="ogInsteadOf" aria-label="${esc(meta.taskLabel)}"><option value="">— optional —</option>${opts}</select>`;
+  el.innerHTML=html;
+  el.querySelectorAll("[data-dur]").forEach(b=>b.addEventListener("click",()=>{
+    const v=b.dataset.dur;
+    if(v==="none") return ogSetPlannedDuration(null);
+    if(v==="custom"){
+      const cur=Number.isFinite(ogActive&&ogActive.initialAuthorizedDuration)?Math.round(ogActive.initialAuthorizedDuration/OG_MIN):"";
+      const raw=prompt("Intended minutes for this session:", cur===""?"":String(cur));
+      if(raw==null) return;
+      const n=parseInt(raw,10);
+      if(!Number.isFinite(n)||n<=0) return;
+      return ogSetPlannedDuration(n);
+    }
+    ogSetPlannedDuration(parseInt(v,10));
+  }));
+  const sel=document.getElementById("ogInsteadOf");
+  if(sel) sel.addEventListener("change",()=>ogSetInsteadOf(sel.value));
+}
+/* ---- the decision moment ---- */
+function ogRenderDecision(){
+  const el=document.getElementById("ogDecision"); if(!el) return;
+  if(!ogDecisionDue()){ el.classList.add("hidden"); el.innerHTML=""; return; }
+  const auth=ogAuthorizedMs(ogActive);
+  /* Surfaced once per authorisation level: extending re-arms it, ignoring it does not re-fire it.
+     The panel itself stays put until the user answers — present, not nagging. */
+  if(ogDecisionShownFor!==auth){ ogDecisionShownFor=auth; ogPlayDecisionSound(); }
+  const planned=ogActive.initialAuthorizedDuration;
+  const extended=auth>planned;
+  el.classList.remove("hidden");
+  el.innerHTML=`
+    <div class="og-dec-title">Time reached</div>
+    <div class="og-dec-sub">You planned ${esc(ogFmtDur(planned))}.${extended?` You authorised ${esc(ogFmtDur(auth))}.`:""}</div>
+    <div class="og-dec-actions">
+      <button class="og-btn og-dec-primary" data-ext="15">+15 MIN</button>
+      <button class="og-btn og-dec-primary" data-ext="30">+30 MIN</button>
+      <button class="og-btn" id="ogDecDone">I'M DONE</button>
+    </div>
+    <button class="og-dec-secondary" id="ogDecAuto">Switch to Autopilot</button>`;
+  el.querySelectorAll("[data-ext]").forEach(b=>b.addEventListener("click",()=>ogExtend(parseInt(b.dataset.ext,10))));
+  document.getElementById("ogDecDone").addEventListener("click",ogStop);
+  document.getElementById("ogDecAuto").addEventListener("click",()=>ogStartMode("autopilot"));
+}
+
+/* ---- Tier 2: today / this week ---- */
+function ogStatValues(t, unaccMs){
+  return [
+    ["productive","Productive",ogFmtDur(t.productive)],
+    ["leisure","Intentional leisure",ogFmtDur(t.leisure)],
+    ["autopilot","Autopilot",ogFmtDur(t.autopilot)],
+    ["overrun","Overrun",ogFmtDur(t.overrun)],
+    ["debt","Time debt",ogFmtDur(t.timeDebt)],
+    ["unacc","Unaccounted",ogFmtDur(unaccMs)],
+    ["conscious","Conscious time",t.consciousPct==null?"—":Math.round(t.consciousPct*100)+"%"]
+  ];
+}
+function ogScope(which){
+  const now=Date.now();
+  const from = which==="week" ? ogWeekStart(now) : ogDayStart(now);
+  const to   = which==="week" ? ogWeekEnd(now)   : ogDayEnd(now);
+  const t=ogTotals(ogSessionsWithActive(), from, to, now);
+  /* Days elapsed so far, not the full seven — a Tuesday should not be measured against a whole
+     week's worth of waking hours. */
+  const days=ogDayCount(from, Math.min(to, ogDayEnd(now)));
+  return { from, to, t, days, unacc:ogUnaccounted(t.tracked, ogSettings.wakingHours, days) };
+}
+function ogRenderStats(){
+  ["today","week"].forEach(which=>{
+    const sc=ogScope(which);
+    const grid=document.getElementById(which==="today"?"ogTodayStats":"ogWeekStats");
+    if(grid) grid.innerHTML=ogStatValues(sc.t,sc.unacc)
+      .map(([k,label,val])=>`<div class="og-stat ${k}"><div class="k">${esc(label)}</div><div class="v" id="og-${which}-${k}">${esc(val)}</div></div>`).join("");
+    const ratio=document.getElementById(which==="today"?"ogTodayRatio":"ogWeekRatio");
+    if(ratio) ratio.textContent=ogRatioText(sc.t.productive, sc.t.autopilot);
+  });
+}
+/* Value-only refresh for the 1s tick — writes textContent into existing nodes so the grids never
+   flicker and never get rebuilt out from under anything. */
+function ogRenderStatValues(){
+  ["today","week"].forEach(which=>{
+    const sc=ogScope(which);
+    ogStatValues(sc.t,sc.unacc).forEach(([k,,val])=>{ const n=document.getElementById(`og-${which}-${k}`); if(n && n.textContent!==val) n.textContent=val; });
+    const ratio=document.getElementById(which==="today"?"ogTodayRatio":"ogWeekRatio");
+    const txt=ogRatioText(sc.t.productive, sc.t.autopilot);
+    if(ratio && ratio.textContent!==txt) ratio.textContent=txt;
+  });
+}
+
+/* ---- Tier 3: at this pace (projections, conversions, small-change) ---- */
+function ogRenderPacePanel(){
+  const el=document.getElementById("ogPacePanel"); if(!el) return;
+  el.classList.toggle("hidden", !ogPaceOpen);
+  if(!ogPaceOpen){ el.innerHTML=""; return; }
+  const now=Date.now();
+  const wh=ogSettings.wakingHours;
+  const d7=ogTrailingDebtPerDay(ogSessions.concat(ogActive?[ogActive]:[]),7,now);
+  const d30=ogTrailingDebtPerDay(ogSessions.concat(ogActive?[ogActive]:[]),30,now);
+  const projLine=(label,perDay)=>{
+    if(perDay==null) return `<div class="og-line"><span>${esc(label)}</span><b>—</b></div>`;
+    const annual=perDay*365, eq=ogEquivalents(annual,wh);
+    return `<div class="og-line"><span>${esc(label)}</span><b>${esc(ogFmtDur(perDay))}/day</b></div>`+
+           `<div class="og-line"><span>→ projected over a year</span><b>${esc(eq.hours.toFixed(0))} hours</b></div>`+
+           `<div class="og-line"><span>→ equivalent</span><b>${esc(eq.fullDays.toFixed(1))} full days · ${esc(eq.wakingDays.toFixed(1))} waking days</b></div>`;
+  };
+  const week=ogScope("week");
+  const eqWeek=ogEquivalents(week.t.timeDebt, wh);
+  const smallChange=(mins)=>{
+    const perDay=mins*OG_MIN;
+    return `<div class="og-line"><span>Reducing Autopilot by ${mins}m/day</span><b>${esc(ogFmtDur(perDay*7))}/week · ${esc((perDay*365/OG_HOUR).toFixed(0))} hours/year</b></div>`;
+  };
+  el.innerHTML=`
+    <h4>At this pace</h4>
+    <div class="og-lines">
+      ${projLine("Trailing 7-day average Time Debt", d7)}
+      ${projLine("Trailing 30-day average Time Debt", d30)}
+    </div>
+    <div class="og-caveat">Projection based on recent behaviour — it describes the current pace, not a predetermined outcome. Change the pace and the projection changes with it.</div>
+    <h4>This week in plain terms</h4>
+    <div class="og-lines">
+      <div class="og-line"><span>Time Debt this week</span><b>${esc(eqWeek.hours.toFixed(1))} hours</b></div>
+      <div class="og-line"><span>→ eight-hour workdays</span><b>${esc(eqWeek.workdays.toFixed(1))}</b></div>
+      <div class="og-line"><span>→ full 24-hour days</span><b>${esc(eqWeek.fullDays.toFixed(1))}</b></div>
+      <div class="og-line"><span>→ ${esc(String(wh))}-hour waking days</span><b>${esc(eqWeek.wakingDays.toFixed(1))}</b></div>
+    </div>
+    <h4>Time returned</h4>
+    <div class="og-lines">
+      ${smallChange(20)}
+      ${smallChange(30)}
+      ${smallChange(45)}
+    </div>`;
+}
+
+/* ---- Tier 4: history (view, edit, delete) ---- */
+function ogHistorySorted(){ return [...ogSessions].sort((a,b)=>b.startTimestamp-a.startTimestamp); }
+function ogToLocalInput(ts){ const d=new Date(ts); return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`; }
+function ogFromLocalInput(v){ const d=new Date(v); return isNaN(d)?null:d.getTime(); }
+function ogRenderHistoryPanel(){
+  const el=document.getElementById("ogHistPanel"); if(!el) return;
+  el.classList.toggle("hidden", !ogHistoryOpen);
+  if(!ogHistoryOpen){ el.innerHTML=""; return; }
+  const all=ogHistorySorted();
+  el.innerHTML=`<h4>Session history</h4><div class="og-hist-list" id="ogHistList"></div>`;
+  const list=document.getElementById("ogHistList");
+  if(!all.length){ list.innerHTML=`<div class="empty-state" style="padding:22px 12px"><div class="big">Nothing tracked yet.</div>Start a session above and it will show up here.</div>`; return; }
+  const shown=all.slice(0,ogHistoryLimit);
+  let lastDay=null;
+  shown.forEach(s=>{
+    const day=ogDayStart(s.startTimestamp);
+    if(day!==lastDay){ lastDay=day; const h=document.createElement("div"); h.className="og-hist-day"; h.textContent=fmtWhen(day); list.appendChild(h); }
+    list.appendChild(ogEditSessionId===s.id ? ogRenderSessionEditor(s) : ogRenderHistoryRow(s));
+  });
+  if(all.length>shown.length){
+    const more=document.createElement("button");
+    more.className="og-hist-more"; more.textContent=`Show more (${all.length-shown.length} older)`;
+    more.addEventListener("click",()=>{ ogHistoryLimit+=50; ogRenderHistoryPanel(); });
+    el.appendChild(more);
+  }
+}
+function ogRenderHistoryRow(s){
+  const meta=ogModeMeta(s.mode);
+  const row=document.createElement("div");
+  row.className="og-hist-row"; row.dataset.id=s.id;
+  row.style.setProperty("--og-row-accent", meta.color);
+  const bits=[];
+  const st=new Date(s.startTimestamp), en=new Date(s.endTimestamp);
+  bits.push(`${fmt12(pad2(st.getHours())+":"+pad2(st.getMinutes()))} – ${fmt12(pad2(en.getHours())+":"+pad2(en.getMinutes()))}`);
+  const auth=ogAuthorizedMs(s);
+  if(auth!=null) bits.push(`authorised ${ogFmtDur(auth)}${s.extensions.length?` (${s.extensions.length} extension${s.extensions.length===1?"":"s"})`:""}`);
+  if(s.overrunDuration>0) bits.push(`<span class="og-m-over">overrun ${ogFmtDur(s.overrunDuration)}</span>`);
+  const io=ogInsteadOfText(s); if(io) bits.push(`<span class="og-m-task">${esc(io)}</span>`);
+  if(s.wasEdited) bits.push("edited");
+  row.innerHTML=`
+    <div class="og-hist-body">
+      <div class="og-hist-top"><span class="og-hist-mode" style="color:${meta.color}">${esc(meta.label)}</span><span class="og-hist-dur">${esc(ogFmtDur(s.actualDuration))}</span></div>
+      <div class="og-hist-meta">${bits.map(x=>`<span>${x}</span>`).join("")}</div>
+    </div>
+    <button class="og-hist-edit" title="Edit session" aria-label="Edit session">✎</button>
+    <button class="og-hist-del" title="Delete session" aria-label="Delete session">✕</button>`;
+  row.querySelector(".og-hist-edit").addEventListener("click",()=>{ closeActiveEdit(true); ogEditSessionId=s.id; ogEditError=""; ogRenderHistoryPanel(); });
+  row.querySelector(".og-hist-del").addEventListener("click",()=>{
+    if(!confirm("Delete this session? Today's and this week's totals will recalculate.")) return;
+    ogSessions=ogSessions.filter(x=>x.id!==s.id);
+    if(ogEditSessionId===s.id) ogEditSessionId=null;
+    ogSaveSessions(); renderOtherGrind();
+  });
+  return row;
+}
+function ogRenderSessionEditor(s){
+  const wrap=document.createElement("div");
+  wrap.className="og-editor"; wrap.dataset.id=s.id;
+  const auth=ogAuthorizedMs(s);
+  const taskOpts=tasks.map(t=>`<option value="${esc(t.id)}"${s.insteadOfTaskId===t.id?" selected":""}>${esc(t.task||"(untitled)")}</option>`).join("");
+  /* If the associated task has since been renamed or deleted, the snapshot is still offered as a
+     selectable option so saving an unrelated edit can never quietly drop the association. */
+  const orphan = s.insteadOfTaskNameSnapshot && !tasks.some(t=>t.id===s.insteadOfTaskId);
+  wrap.innerHTML=`
+    <div class="og-ed-grid">
+      <div class="pe-field"><label for="ogEdStart">Start</label><input type="datetime-local" id="ogEdStart" value="${esc(ogToLocalInput(s.startTimestamp))}"></div>
+      <div class="pe-field"><label for="ogEdEnd">End</label><input type="datetime-local" id="ogEdEnd" value="${esc(ogToLocalInput(s.endTimestamp))}"></div>
+      <div class="pe-field"><label for="ogEdMode">Mode</label><select id="ogEdMode">${OG_MODES.map(m=>`<option value="${m}"${s.mode===m?" selected":""}>${esc(OG_MODE_META[m].label)}</option>`).join("")}</select></div>
+      <div class="pe-field"><label for="ogEdAuth">Authorised (min, leisure only)</label><input type="number" id="ogEdAuth" min="0" step="1" placeholder="unbounded" value="${auth!=null?Math.round(auth/OG_MIN):""}"></div>
+      <div class="pe-field og-ed-wide"><label for="ogEdTask">Associated task</label><select id="ogEdTask"><option value="">— none —</option>${orphan?`<option value="__keep" selected>${esc(s.insteadOfTaskNameSnapshot)} (original task no longer exists)</option>`:""}${taskOpts}</select></div>
+      <div class="pe-field og-ed-wide"><label for="ogEdNote">Note</label><input type="text" id="ogEdNote" value="${esc(s.note)}" placeholder="Optional"></div>
+    </div>
+    ${ogEditError?`<div class="og-ed-err">${esc(ogEditError)}</div>`:""}
+    <div class="pe-actions">
+      <button class="btn sm" id="ogEdCancel">Cancel</button>
+      <button class="btn add" id="ogEdSave">Save</button>
+    </div>`;
+  wrap.querySelector("#ogEdCancel").addEventListener("click",()=>{ ogEditSessionId=null; ogEditError=""; ogRenderHistoryPanel(); });
+  wrap.querySelector("#ogEdSave").addEventListener("click",()=>ogSaveSessionEdit(s.id));
+  return wrap;
+}
+function ogSaveSessionEdit(id){
+  const s=ogSessions.find(x=>x.id===id); if(!s) return;
+  const start=ogFromLocalInput(document.getElementById("ogEdStart").value);
+  const end=ogFromLocalInput(document.getElementById("ogEdEnd").value);
+  if(start==null||end==null){ ogEditError="Both a start and an end time are needed."; ogRenderHistoryPanel(); return; }
+  if(end<start){ ogEditError="The end time can't be before the start time."; ogRenderHistoryPanel(); return; }
+  const mode=document.getElementById("ogEdMode").value;
+  const authRaw=document.getElementById("ogEdAuth").value.trim();
+  const taskVal=document.getElementById("ogEdTask").value;
+  s.startTimestamp=start; s.endTimestamp=end;
+  s.mode=OG_MODES.includes(mode)?mode:s.mode;
+  if(s.mode!=="leisure" || authRaw===""){ s.initialAuthorizedDuration=null; s.extensions=[]; }
+  else {
+    /* The field edits the TOTAL authorised time, so the structured extension history is replaced by
+       the single figure the user just stated — a manual correction outranks the recorded decisions
+       it contradicts, and the record is flagged wasEdited so analysis can tell them apart. */
+    const n=parseInt(authRaw,10);
+    s.initialAuthorizedDuration=Number.isFinite(n)&&n>=0 ? n*OG_MIN : null;
+    s.extensions=[];
+  }
+  if(taskVal===""){ s.insteadOfTaskId=""; s.insteadOfTaskNameSnapshot=""; }
+  else if(taskVal!=="__keep"){ const t=tasks.find(x=>x.id===taskVal); if(t){ s.insteadOfTaskId=t.id; s.insteadOfTaskNameSnapshot=t.task||""; } }
+  s.note=document.getElementById("ogEdNote").value.trim();
+  s.wasEdited=true; s.updatedAt=Date.now();
+  ogRecompute(s);
+  ogSessions.sort((a,b)=>a.startTimestamp-b.startTimestamp);
+  ogEditSessionId=null; ogEditError="";
+  ogSaveSessions(); renderOtherGrind();
+}
+
+function renderOtherGrind(){
+  ogRenderLive();
+  ogRenderControls();
+  ogRenderSessionOpts();
+  ogRenderDecision();
+  ogRenderStats();
+  ogRenderPacePanel();
+  ogRenderHistoryPanel();
+  const wake=document.getElementById("ogWaking");
+  if(wake && document.activeElement!==wake) wake.value=String(ogSettings.wakingHours);
+  const pt=document.getElementById("ogPaceToggle"); if(pt) pt.setAttribute("aria-expanded", String(ogPaceOpen));
+  const ht=document.getElementById("ogHistToggle"); if(ht) ht.setAttribute("aria-expanded", String(ogHistoryOpen));
+}
+/* Runs every second, ahead of tick()'s editingActive() guard, because the timer has to keep moving
+   even while a task is being edited. It only writes text into existing leaf nodes and swaps classes
+   on #og — it never rebuilds a container, so it can't disturb an open editor anywhere on the page. */
+function ogTickLive(){
+  if(!document.getElementById("ogTimer")) return;
+  const wasDue = !document.getElementById("ogDecision").classList.contains("hidden");
+  ogRenderClock();
+  const root=document.getElementById("og");
+  const amb=ogAmbientLevel();
+  for(let i=1;i<=3;i++) root.classList.toggle("og-amb-"+i, amb===i);
+  if(ogDecisionDue()!==wasDue) ogRenderDecision();
+  ogRenderStatValues();
+}
+document.getElementById("ogPaceToggle").addEventListener("click",()=>{ ogPaceOpen=!ogPaceOpen; renderOtherGrind(); });
+document.getElementById("ogHistToggle").addEventListener("click",()=>{ ogHistoryOpen=!ogHistoryOpen; if(!ogHistoryOpen){ ogEditSessionId=null; ogEditError=""; } ogRenderHistoryPanel(); const ht=document.getElementById("ogHistToggle"); ht.setAttribute("aria-expanded",String(ogHistoryOpen)); });
+document.getElementById("ogWaking").addEventListener("change",e=>{
+  const n=Number(e.target.value);
+  if(!Number.isFinite(n)||n<=0||n>24){ e.target.value=String(ogSettings.wakingHours); return; }
+  ogSettings.wakingHours=n; ogSaveSettings(); renderOtherGrind();
+});
+
 /* ---------------- tick ---------------- */
 function tick(){ const d=new Date(); document.getElementById("clock").innerHTML=`${pad2(d.getHours())}:${pad2(d.getMinutes())}<span class="sec">:${pad2(d.getSeconds())}</span>`;
+  /* Deliberately ahead of the editingActive() guard: an active Other Grind session has to keep
+     counting while a task is being edited. ogTickLive() only writes text into leaf nodes, so it is
+     safe outside the guard in a way a full render() would never be. */
+  ogTickLive();
   /* editingActive() covers the full task editor, place editor, date editor, AND any inline text/popover —
      nothing the 1s tick does may ever rebuild DOM out from under an open editor. */
   if(!editingActive()){
