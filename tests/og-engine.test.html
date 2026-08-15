@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>The Other Grind — Engine Tests</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+    body { margin: 0; background: #10151c; color: #e7edf5; }
+    main { width: min(980px, calc(100% - 32px)); margin: 32px auto 64px; }
+    h1 { margin-bottom: 6px; }
+    .dev-note { border: 1px solid #bb8120; background: #2a2114; color: #ffd58b; padding: 12px 14px; border-radius: 8px; }
+    #summary { margin: 20px 0; padding: 18px; border-radius: 10px; background: #1a222c; border-left: 5px solid #718096; }
+    #summary.pass { border-color: #35c77b; }
+    #summary.fail { border-color: #f56565; }
+    #summary h2 { margin: 0 0 6px; }
+    #summary p { margin: 0; color: #adbac7; }
+    .group { margin-top: 22px; }
+    .group h2 { font-size: 1.05rem; margin-bottom: 8px; }
+    ol { margin: 0; padding-left: 32px; }
+    li { padding: 7px 9px; margin: 3px 0; border-radius: 5px; background: #171e27; }
+    li.pass { color: #a7f3c8; }
+    li.fail { color: #ffc0c0; background: #321d22; white-space: pre-wrap; }
+    code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>The Other Grind — Engine Tests</h1>
+    <p class="dev-note"><strong>Development-only test harness.</strong> It reads the production engine from <code>../index.html</code>. It does not load the application, initialize Firebase, or read/write localStorage.</p>
+    <section id="summary" aria-live="polite"><h2>Running…</h2><p>Loading the production engine.</p></section>
+    <div id="results"></div>
+  </main>
+
+  <script>
+  "use strict";
+
+  const results = [];
+  let currentGroup = "Harness";
+
+  function record(name, pass, detail="") {
+    results.push({ group:currentGroup, name, pass, detail });
+  }
+  function test(name, fn) {
+    try { fn(); record(name, true); }
+    catch (error) { record(name, false, error && error.stack ? error.stack : String(error)); }
+  }
+  function equal(actual, expected, message="") {
+    if (!Object.is(actual, expected)) throw new Error(`${message ? message+": " : ""}expected ${formatValue(expected)}, got ${formatValue(actual)}`);
+  }
+  function near(actual, expected, epsilon=1e-9, message="") {
+    if (!Number.isFinite(actual) || Math.abs(actual-expected)>epsilon)
+      throw new Error(`${message ? message+": " : ""}expected ${expected} ± ${epsilon}, got ${actual}`);
+  }
+  function ok(value, message="expected a truthy value") { if (!value) throw new Error(message); }
+  function formatValue(value) { return typeof value === "string" ? JSON.stringify(value) : String(value); }
+  function group(name) { currentGroup=name; }
+
+  // Extract a top-level production function declaration without executing the application script.
+  function extractFunction(source, name) {
+    const marker = `function ${name}`;
+    const start = source.indexOf(marker);
+    if (start < 0) throw new Error(`Production function ${name} was not found`);
+    const open = source.indexOf("{", start + marker.length);
+    if (open < 0) throw new Error(`Opening brace for ${name} was not found`);
+    let depth=0, state="code", escaped=false;
+    for (let i=open; i<source.length; i++) {
+      const ch=source[i], next=source[i+1];
+      if (state==="line") { if (ch==="\n") state="code"; continue; }
+      if (state==="block") { if (ch==="*" && next==="/") { state="code"; i++; } continue; }
+      if (state==="single" || state==="double" || state==="template") {
+        if (escaped) { escaped=false; continue; }
+        if (ch==="\\") { escaped=true; continue; }
+        if ((state==="single" && ch==="'") || (state==="double" && ch==='"') || (state==="template" && ch==='`')) state="code";
+        continue;
+      }
+      if (ch==="/" && next==="/") { state="line"; i++; continue; }
+      if (ch==="/" && next==="*") { state="block"; i++; continue; }
+      if (ch==="'") { state="single"; continue; }
+      if (ch==='"') { state="double"; continue; }
+      if (ch==='`') { state="template"; continue; }
+      if (ch==="{") depth++;
+      if (ch==="}" && --depth===0) return source.slice(start,i+1);
+    }
+    throw new Error(`Closing brace for ${name} was not found`);
+  }
+
+  function extractDeclaration(source, pattern, description) {
+    const match=source.match(pattern);
+    if (!match) throw new Error(`Production declaration ${description} was not found`);
+    return match[0];
+  }
+
+  function buildEngine(source) {
+    const names=["ogDayStart","ogAddDays","ogDayEnd","ogWeekStart","ogWeekEnd","ogDayCount","ogRecompute","ogAuthorizedMs","ogEffectiveEnd","ogOverlap","ogTotals","ogUnaccounted","ogRatioText","ogTrailingDebtPerDay","ogFmtDur","ogFmtClock","ogFmtHours","ogEquivalents","pad2"];
+    const constants=extractDeclaration(source,/const OG_MIN\s*=[^;]+;/,"OG_MIN / OG_HOUR");
+    const code=[constants,...names.map(name=>extractFunction(source,name)),`return {${names.join(",")},OG_MIN,OG_HOUR};`].join("\n");
+    return Function(code)();
+  }
+
+  function buildActionHarness(source, engine) {
+    const names=["ogBlankSession","ogRecompute","ogAuthorizedMs","ogEndActive","ogRecordDecision","ogStartMode","ogStop","ogExtend","ogDecisionDue"];
+    const modeDecl=extractDeclaration(source,/const OG_MODES\s*=\s*\[[^;]+\]\s*;/,"OG_MODES");
+    const code=[
+      `const OG_MIN=${engine.OG_MIN};`, modeDecl,
+      "let now=0, nextId=0, ogActive=null, ogSessions=[], ogDecisionShownFor=null;",
+      "const Date={now:()=>now};",
+      "function uid(){ return `test-${++nextId}`; }",
+      "function ogSaveSessions(){} function ogSaveActive(){} function renderOtherGrind(){}",
+      ...names.map(name=>extractFunction(source,name)),
+      "return { setNow:v=>now=v, setActive:v=>ogActive=v, getActive:()=>ogActive, getSessions:()=>ogSessions, reset:()=>{ogActive=null;ogSessions=[];ogDecisionShownFor=null;}, ogStartMode,ogStop,ogExtend,ogDecisionDue };"
+    ].join("\n");
+    return Function(code)();
+  }
+
+  function runSuite(E, actions) {
+    const M=E.OG_MIN, H=E.OG_HOUR;
+    const at=(y,month,day,h=0,m=0,s=0)=>new Date(y,month-1,day,h,m,s).getTime();
+    const session=(mode,start,end,auth=null,extensions=[])=>({mode,startTimestamp:start,endTimestamp:end,initialAuthorizedDuration:auth,extensions});
+
+    group("Duration and authorization");
+    test("actual duration is recomputed from timestamps",()=>{ const s=session("leisure",0,47*M,30*M); E.ogRecompute(s); equal(s.actualDuration,47*M); });
+    test("initial authorization is preserved",()=>{ const s=session("leisure",0,20*M,30*M); E.ogRecompute(s); equal(s.totalAuthorizedDuration,30*M); });
+    test("one extension increases total authorization",()=>{ const s=session("leisure",0,40*M,30*M,[{duration:15*M}]); E.ogRecompute(s); equal(s.extensionDuration,15*M); equal(s.totalAuthorizedDuration,45*M); });
+    test("multiple extensions are summed",()=>{ const s=session("leisure",0,75*M,30*M,[{duration:30*M},{duration:15*M}]); E.ogRecompute(s); equal(s.extensionDuration,45*M); equal(s.totalAuthorizedDuration,75*M); });
+    test("inside authorization has zero overrun",()=>{ const s=session("leisure",0,44*M,30*M,[{duration:15*M}]); E.ogRecompute(s); equal(s.overrunDuration,0); });
+    test("exact authorization boundary has zero overrun",()=>{ const s=session("leisure",0,45*M,30*M,[{duration:15*M}]); E.ogRecompute(s); equal(s.overrunDuration,0); });
+    test("past authorization has correct overrun",()=>{ const s=session("leisure",0,50*M,30*M,[{duration:15*M}]); E.ogRecompute(s); equal(s.overrunDuration,5*M); });
+    test("45m authorized / 2h13m actual produces 1h28m overrun",()=>{ const s=session("leisure",0,133*M,45*M); E.ogRecompute(s); equal(s.overrunDuration,88*M); });
+    test("editing timestamps replaces stale derived values",()=>{ const s={...session("leisure",0,50*M,30*M),actualDuration:999,extensionDuration:999,totalAuthorizedDuration:999,overrunDuration:999}; E.ogRecompute(s); equal(s.actualDuration,50*M); equal(s.extensionDuration,0); equal(s.totalAuthorizedDuration,30*M); equal(s.overrunDuration,20*M); s.endTimestamp=20*M; E.ogRecompute(s); equal(s.overrunDuration,0); });
+    test("negative actual duration clamps to zero",()=>{ const s=session("leisure",10*M,5*M,1*M); E.ogRecompute(s); equal(s.actualDuration,0); equal(s.overrunDuration,0); });
+    test("productive never overruns despite stray authorization",()=>{ const s=session("productive",0,2*H,30*M); E.ogRecompute(s); equal(s.totalAuthorizedDuration,null); equal(s.overrunDuration,0); });
+    test("Autopilot never overruns despite stray authorization",()=>{ const s=session("autopilot",0,2*H,30*M); E.ogRecompute(s); equal(s.totalAuthorizedDuration,null); equal(s.overrunDuration,0); });
+
+    group("Unbounded leisure and Conscious-Time");
+    test("unbounded leisure duration and separate bucket are preserved",()=>{ const t=E.ogTotals([session("leisure",0,2*H)],0,3*H,3*H); equal(t.leisure,2*H); equal(t.unboundedLeisure,2*H); });
+    test("unbounded leisure produces zero overrun and Time Debt",()=>{ const t=E.ogTotals([session("leisure",0,2*H)],0,3*H,3*H); equal(t.overrun,0); equal(t.timeDebt,0); });
+    test("unbounded-only history has unavailable Conscious-Time",()=>{ const t=E.ogTotals([session("leisure",0,2*H)],0,3*H,3*H); equal(t.boundedLeisure,0); equal(t.measuredDiscretionary,0); equal(t.consciousPct,null); });
+    test("normal bounded leisure is 100% conscious",()=>{ const t=E.ogTotals([session("leisure",0,H,H)],0,H,H); equal(t.consciousPct,1); });
+    test("bounded leisure plus Autopilot",()=>{ const t=E.ogTotals([session("leisure",0,H,H),session("autopilot",H,2*H)],0,2*H,2*H); near(t.consciousPct,.5); });
+    test("bounded leisure plus Overrun",()=>{ const t=E.ogTotals([session("leisure",0,2*H,H)],0,2*H,2*H); near(t.consciousPct,.5); });
+    test("bounded leisure plus Autopilot plus Overrun",()=>{ const t=E.ogTotals([session("leisure",0,2*H,H),session("autopilot",2*H,3*H)],0,3*H,3*H); near(t.consciousPct,1/3); });
+    test("adding unbounded leisure changes neither side nor percentage",()=>{ const base=[session("leisure",0,2*H,H),session("autopilot",2*H,3*H)]; const a=E.ogTotals(base,0,5*H,5*H), b=E.ogTotals([...base,session("leisure",3*H,5*H)],0,5*H,5*H); equal(b.boundedLeisure,a.boundedLeisure); equal(b.measuredDiscretionary,a.measuredDiscretionary); equal(b.consciousPct,a.consciousPct); });
+    test("zero measured discretionary time returns null",()=>{ const t=E.ogTotals([session("productive",0,H)],0,H,H); equal(t.measuredDiscretionary,0); equal(t.consciousPct,null); });
+    test("blueprint Conscious-Time example is 71.4%",()=>{ const t=E.ogTotals([session("leisure",0,5*H,5*H),session("autopilot",5*H,7*H)],0,7*H,7*H); near(t.consciousPct,5/7); });
+
+    group("Time Debt and bucket integrity");
+    test("Time Debt equals Autopilot plus Overrun",()=>{ const t=E.ogTotals([session("leisure",0,3*H,H),session("autopilot",3*H,7*H)],0,7*H,7*H); equal(t.timeDebt,6*H); equal(t.timeDebt,t.autopilot+t.overrun); });
+    test("four reporting buckets sum exactly to tracked",()=>{ const t=E.ogTotals([session("productive",0,H),session("leisure",H,3*H,1*H),session("autopilot",3*H,4*H),session("leisure",4*H,5*H)],0,5*H,5*H); equal(t.tracked,t.productive+t.leisure+t.autopilot+t.overrun); equal(t.tracked,5*H); });
+    test("unbounded leisure remains in leisure",()=>{ const t=E.ogTotals([session("leisure",0,90*M)],0,2*H,2*H); equal(t.leisure,90*M); equal(t.tracked,90*M); });
+    test("overrun is excluded from leisure",()=>{ const t=E.ogTotals([session("leisure",0,90*M,30*M)],0,2*H,2*H); equal(t.leisure,30*M); equal(t.overrun,60*M); equal(t.tracked,90*M); });
+    test("worked Time Debt example is 11h15m",()=>{ const t=E.ogTotals([session("leisure",0,764*M,521*M),session("autopilot",764*M,1196*M)],0,1200*M,1200*M); equal(t.leisure,521*M); equal(t.overrun,243*M); equal(t.autopilot,432*M); equal(t.timeDebt,675*M); });
+
+    group("Productive : Autopilot ratio");
+    test("productive only is zero-safe",()=>equal(E.ogRatioText(H,0),"No Autopilot recorded"));
+    test("Autopilot only is zero-safe",()=>equal(E.ogRatioText(0,H),"No Productive time recorded"));
+    test("both zero are zero-safe",()=>equal(E.ogRatioText(0,0),"Nothing recorded yet"));
+    test("both nonzero produce a finite ratio",()=>{ const value=E.ogRatioText(100*M,35*M); equal(value,"Productive : Autopilot — 1 : 0.35"); ok(!/Infinity|NaN/.test(value)); });
+
+    group("Unaccounted time");
+    test("normal full-waking-day calculation",()=>equal(E.ogUnaccounted(10*H,16,1),6*H));
+    test("zero when tracked equals waking budget",()=>equal(E.ogUnaccounted(16*H,16,1),0));
+    test("cannot go negative",()=>equal(E.ogUnaccounted(20*H,16,1),0));
+    test("varying waking hours changes the full-day budget",()=>{ equal(E.ogUnaccounted(5*H,10,1),5*H); equal(E.ogUnaccounted(5*H,16,1),11*H); });
+    test("multiple full waking days are budgeted",()=>equal(E.ogUnaccounted(20*H,16,2),12*H));
+
+    group("Day boundaries");
+    test("cross-midnight session splits across days",()=>{ const s=session("leisure",at(2026,1,15,23,30),at(2026,1,16,1)); const d1=E.ogTotals([s],at(2026,1,15),at(2026,1,16),s.endTimestamp), d2=E.ogTotals([s],at(2026,1,16),at(2026,1,17),s.endTimestamp); equal(d1.leisure,30*M); equal(d2.leisure,60*M); equal(d1.leisure+d2.leisure,90*M); });
+    test("cross-midnight overrun is attributed when it occurred",()=>{ const s=session("leisure",at(2026,1,15,23),at(2026,1,16,1),30*M); const d1=E.ogTotals([s],at(2026,1,15),at(2026,1,16),s.endTimestamp), d2=E.ogTotals([s],at(2026,1,16),at(2026,1,17),s.endTimestamp); equal(d1.leisure,30*M); equal(d1.overrun,30*M); equal(d2.leisure,0); equal(d2.overrun,60*M); });
+    test("exact midnight end stays in preceding day",()=>{ const s=session("productive",at(2026,1,15,23,30),at(2026,1,16)); equal(E.ogTotals([s],at(2026,1,15),at(2026,1,16),s.endTimestamp).productive,30*M); equal(E.ogTotals([s],at(2026,1,16),at(2026,1,17),s.endTimestamp).productive,0); });
+    test("multi-day session allocates every local day",()=>{ const s=session("productive",at(2026,1,15,12),at(2026,1,17,12)); equal(E.ogTotals([s],at(2026,1,15),at(2026,1,16),s.endTimestamp).productive,12*H); equal(E.ogTotals([s],at(2026,1,16),at(2026,1,17),s.endTimestamp).productive,24*H); equal(E.ogTotals([s],at(2026,1,17),at(2026,1,18),s.endTimestamp).productive,12*H); });
+    test("session entirely within one day is unchanged",()=>{ const s=session("autopilot",at(2026,1,15,9),at(2026,1,15,10,30)); equal(E.ogTotals([s],at(2026,1,15),at(2026,1,16),s.endTimestamp).autopilot,90*M); });
+
+    group("Monday-start week boundaries");
+    test("Sunday to Monday crosses the reporting week",()=>{ const s=session("productive",at(2026,3,1,23),at(2026,3,2,1)); const oldWeek=E.ogWeekStart(s.startTimestamp), newWeek=E.ogWeekStart(s.endTimestamp); ok(oldWeek!==newWeek); equal(E.ogTotals([s],oldWeek,E.ogWeekEnd(oldWeek),s.endTimestamp).productive,H); equal(E.ogTotals([s],newWeek,E.ogWeekEnd(newWeek),s.endTimestamp).productive,H); });
+    test("Monday is the exact week start",()=>equal(E.ogWeekStart(at(2026,3,2,14)),at(2026,3,2)));
+    test("Sunday remains in its preceding Monday-start week",()=>equal(E.ogWeekStart(at(2026,3,1,14)),at(2026,2,23)));
+    test("Saturday to Sunday does not cross a week",()=>equal(E.ogWeekStart(at(2026,2,28,23)),E.ogWeekStart(at(2026,3,1,1))));
+    test("session ending at exact Monday boundary contributes nothing to new week",()=>{ const s=session("productive",at(2026,3,1,23),at(2026,3,2)); equal(E.ogTotals([s],at(2026,3,2),at(2026,3,9),s.endTimestamp).productive,0); });
+
+    group("Calendar and DST edges");
+    test("spring-forward uses the next calendar date, not fixed 24 hours",()=>{ const start=at(2026,3,8), end=E.ogAddDays(start,1); equal(new Date(end).getDate(),9); equal((end-start)/H,23,"This assertion expects the project timezone America/New_York"); });
+    test("fall-back uses the next calendar date, not fixed 24 hours",()=>{ const start=at(2026,11,1), end=E.ogAddDays(start,1); equal(new Date(end).getDate(),2); equal((end-start)/H,25,"This assertion expects the project timezone America/New_York"); });
+    test("day count crosses a month boundary by calendar date",()=>equal(E.ogDayCount(at(2026,1,31),at(2026,2,2)),2));
+    test("day count crosses a year boundary by calendar date",()=>equal(E.ogDayCount(at(2025,12,31),at(2026,1,2)),2));
+    test("day start remains local midnight across DST",()=>{ const value=E.ogDayStart(at(2026,3,8,18)); const d=new Date(value); equal(d.getHours(),0); equal(d.getDate(),8); });
+
+    group("Trailing projection logic");
+    const projectionNow=at(2026,8,15,12);
+    test("empty history returns null",()=>equal(E.ogTrailingDebtPerDay([],7,projectionNow),null));
+    test("one session today averages over one tracking day",()=>{ const s=session("autopilot",at(2026,8,15,8),at(2026,8,15,10)); equal(E.ogTrailingDebtPerDay([s],7,projectionNow),2*H); });
+    test("earliest session newer than window clamps averaging start",()=>{ const s=session("autopilot",at(2026,8,13,10),at(2026,8,13,12)); near(E.ogTrailingDebtPerDay([s],7,projectionNow),2*H/3); });
+    test("earliest session older than window uses the full seven days",()=>{ const sessions=[session("productive",at(2026,7,1,9),at(2026,7,1,10)),session("autopilot",at(2026,8,15,0),at(2026,8,15,7))]; equal(E.ogTrailingDebtPerDay(sessions,7,projectionNow),H); });
+    test("seven-day average",()=>{ const sessions=[session("productive",at(2026,8,9),at(2026,8,9,1)),session("autopilot",at(2026,8,15),at(2026,8,15,7))]; equal(E.ogTrailingDebtPerDay(sessions,7,projectionNow),H); });
+    test("thirty-day average",()=>{ const sessions=[session("productive",at(2026,7,17),at(2026,7,17,1)),session("autopilot",at(2026,8,14),at(2026,8,15,6))]; equal(E.ogTrailingDebtPerDay(sessions,30,projectionNow),H); });
+    test("dates before tracking began do not dilute average",()=>{ const s=session("autopilot",at(2026,8,15,8),at(2026,8,15,10)); equal(E.ogTrailingDebtPerDay([s],30,projectionNow),2*H); });
+    test("30m daily projects to 3h30m weekly",()=>equal((30*M)*7,3.5*H));
+    test("45m daily projects to about 274 hours annually",()=>near((45*M)*365/H,273.75));
+    test("20m daily projects to about 122 hours annually",()=>near((20*M)*365/H,121.66666666666667));
+
+    group("Time equivalents");
+    test("8-hour workday conversion",()=>equal(E.ogEquivalents(16*H,16).workdays,2));
+    test("24-hour full-day conversion",()=>equal(E.ogEquivalents(48*H,16).fullDays,2));
+    test("configurable waking-day conversion",()=>{ equal(E.ogEquivalents(30*H,15).wakingDays,2); equal(E.ogEquivalents(30*H,10).wakingDays,3); });
+    test("underlying hours are retained",()=>equal(E.ogEquivalents(12.5*H,16).hours,12.5));
+
+    group("Formatting");
+    test("zero duration",()=>equal(E.ogFmtDur(0),"0m"));
+    test("under one minute rounds down below 30 seconds",()=>equal(E.ogFmtDur(29.9*1000),"0m"));
+    test("59.5 seconds rounds to one minute",()=>equal(E.ogFmtDur(59.5*1000),"1m"));
+    test("near one hour below rounding threshold",()=>equal(E.ogFmtDur(59*M+29*1000),"59m"));
+    test("near one hour at rounding threshold",()=>equal(E.ogFmtDur(59*M+30*1000),"1h"));
+    test("multiple hours with minutes",()=>equal(E.ogFmtDur(3*H+17*M),"3h 17m"));
+    test("clock formatting floors sub-second values",()=>equal(E.ogFmtClock(H+2*M+3.9*1000),"01:02:03"));
+    test("hour formatting has one decimal",()=>equal(E.ogFmtHours(95*M),"1.6h"));
+
+    group("Decision count and short sessions");
+    const bounded=(start,auth=30*M)=>({id:"bounded",mode:"leisure",startTimestamp:start,endTimestamp:null,actualDuration:0,initialAuthorizedDuration:auth,extensions:[],extensionDuration:0,totalAuthorizedDuration:auth,overrunDuration:0,decisionCount:0,createdAt:start,updatedAt:start});
+    test("+15 counts once when the boundary is due",()=>{ actions.reset(); actions.setNow(0); actions.setActive(bounded(0)); actions.setNow(30*M); actions.ogExtend(15); equal(actions.getActive().decisionCount,1); equal(actions.getActive().extensions.length,1); });
+    test("+30 counts once when the boundary is due",()=>{ actions.reset(); actions.setActive(bounded(0)); actions.setNow(30*M); actions.ogExtend(30); equal(actions.getActive().decisionCount,1); equal(actions.getActive().extensions[0].duration,30*M); });
+    test("I'M DONE counts once when the boundary is due",()=>{ actions.reset(); actions.setActive(bounded(0)); actions.setNow(30*M); actions.ogStop(); equal(actions.getSessions().length,1); equal(actions.getSessions()[0].decisionCount,1); });
+    test("Switch to Autopilot counts once when the boundary is due",()=>{ actions.reset(); actions.setActive(bounded(0)); actions.setNow(30*M); actions.ogStartMode("autopilot"); equal(actions.getSessions()[0].decisionCount,1); equal(actions.getActive().mode,"autopilot"); });
+    test("extension before expiry does not increment",()=>{ actions.reset(); actions.setActive(bounded(0)); actions.setNow(29*M); actions.ogExtend(15); equal(actions.getActive().decisionCount,0); });
+    test("stop before expiry does not increment",()=>{ actions.reset(); actions.setActive(bounded(0)); actions.setNow(29*M); actions.ogStop(); equal(actions.getSessions()[0].decisionCount,0); });
+    test("mode switch before expiry does not increment",()=>{ actions.reset(); actions.setActive(bounded(0)); actions.setNow(29*M); actions.ogStartMode("autopilot"); equal(actions.getSessions()[0].decisionCount,0); });
+    test("same-mode press does not increment or restart",()=>{ actions.reset(); const active=bounded(0); actions.setActive(active); actions.setNow(30*M); actions.ogStartMode("leisure"); equal(actions.getActive(),active); equal(active.decisionCount,0); });
+    test("sub-second stop is discarded as mis-tap noise",()=>{ actions.reset(); actions.setNow(1000); actions.ogStartMode("productive"); actions.setNow(1999); actions.ogStop(); equal(actions.getSessions().length,0); });
+    test("exactly one-second session is retained",()=>{ actions.reset(); actions.setNow(1000); actions.ogStartMode("productive"); actions.setNow(2000); actions.ogStop(); equal(actions.getSessions().length,1); equal(actions.getSessions()[0].actualDuration,1000); });
+  }
+
+  function renderResults() {
+    const passed=results.filter(r=>r.pass).length, failed=results.length-passed;
+    const summary=document.getElementById("summary");
+    summary.className=failed ? "fail" : "pass";
+    summary.innerHTML=`<h2>${failed ? "FAIL" : "PASS"}: ${passed}/${results.length} assertions passed</h2><p>${failed} failed · ${Intl.DateTimeFormat().resolvedOptions().timeZone} · Production source fetched at run time</p>`;
+    const host=document.getElementById("results"); host.innerHTML="";
+    [...new Set(results.map(r=>r.group))].forEach(groupName=>{
+      const section=document.createElement("section"); section.className="group";
+      const heading=document.createElement("h2"); heading.textContent=groupName; section.appendChild(heading);
+      const list=document.createElement("ol");
+      results.filter(r=>r.group===groupName).forEach(r=>{ const item=document.createElement("li"); item.className=r.pass?"pass":"fail"; item.textContent=`${r.pass?"PASS":"FAIL"} — ${r.name}${r.detail?`\n${r.detail}`:""}`; list.appendChild(item); });
+      section.appendChild(list); host.appendChild(section);
+    });
+    window.__OG_TEST_RESULTS={ total:results.length, passed, failed, assertions:results.map(r=>({...r})) };
+    document.title=`${failed?"FAIL":"PASS"} (${passed}/${results.length}) — The Other Grind Tests`;
+  }
+
+  (async function main(){
+    try {
+      const response=await fetch("../index.html",{cache:"no-store"});
+      if (!response.ok) throw new Error(`Could not fetch production index.html: HTTP ${response.status}`);
+      const source=await response.text();
+      const engine=buildEngine(source), actions=buildActionHarness(source,engine);
+      runSuite(engine,actions);
+    } catch (error) {
+      record("load and extract production engine",false,error && error.stack ? error.stack : String(error));
+    }
+    renderResults();
+  })();
+  </script>
+</body>
+</html>
