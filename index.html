@@ -531,6 +531,15 @@
   .shop-clear { font-size:12px; color:var(--muted); background:none; border:1px solid var(--line); border-radius:8px; padding:5px 9px; cursor:pointer; }
   .shop-clear:hover { border-color:var(--muted-2); color:var(--ink); }
 
+  /* sign-in state — restrained, and only rendered when the user must actually do something */
+  .auth-who { font-family:var(--mono); font-size:11px; color:var(--muted-2); max-width:190px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .auth-notice { border:1px solid var(--line); border-left:3px solid var(--signal); border-radius:12px; background:var(--card); padding:12px 14px; margin-bottom:16px; box-shadow:var(--shadow); }
+  .auth-notice.warn { border-left-color:var(--star); }
+  .auth-notice .an-title { font-size:14px; font-weight:700; color:var(--ink); }
+  .auth-notice .an-body { font-size:12.5px; color:var(--muted); margin-top:4px; line-height:1.5; }
+  .auth-notice .an-actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:10px; }
+  .auth-notice code { font-family:var(--mono); font-size:11.5px; background:var(--surface-2); border:1px solid var(--line); border-radius:6px; padding:3px 7px; color:var(--ink); user-select:all; word-break:break-all; }
+
   .empty-state { text-align:center; padding:40px 16px; color:var(--muted); border:1px dashed var(--line); border-radius:var(--radius); background:var(--card); }
   .empty-state .big { font-size:16px; font-weight:600; color:var(--ink); margin-bottom:5px; }
   .hint { font-size:11.5px; color:var(--muted-2); margin-top:22px; text-align:center; font-family:var(--mono); }
@@ -671,6 +680,8 @@
       <div class="util">
         <span class="sync-badge" id="syncBadge"></span>
         <span class="family-link-status" id="familyLinkStatus"></span>
+        <span class="auth-who" id="authWho"></span>
+        <button class="btn sm" id="authBtn" hidden></button>
         <button class="btn sm" id="soundToggle">Sound: On</button>
         <button class="btn sm" id="printBtn">🖨 Print</button>
         <button class="btn sm" id="exportBtn">Export</button>
@@ -679,6 +690,11 @@
       </div>
     </div>
   </header>
+
+  <!-- Sign-in state. Only ever shown when there is something the user must act on: signed out
+       (cloud sync is off, the app still works locally) or signed in but not authorised by the
+       database rules. Silent once sync is healthy. -->
+  <div class="auth-notice hidden" id="authNotice"></div>
 
   <!-- THE OTHER GRIND — Tier 1 (mode, live timer, remaining authorised time, controls) sits above
        everything else on purpose: it must be the first thing visible on opening The Grind.
@@ -916,6 +932,7 @@
 </div>
 
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script>
 "use strict";
@@ -976,16 +993,90 @@ const FIREBASE_CONFIG = {
 const APP_ID = "the-grind-scattabrain-2026";   // Grind's own Firebase node — must match on every device, never "ccafc-home"
 
 let db=null, syncing=false, remoteApplying=false, pushTimer=null;
+/* ---------------- authentication ----------------
+   Cloud data is private: the database rules authorise exactly one Google account, so the app must
+   never touch a protected path speculatively. No database reference is created and no listener is
+   attached until a user is actually signed in — until then The Grind runs entirely on localStorage,
+   which is a fully working state, not a degraded one. Nothing here ever clears local data. */
+let authUser=null, authReady=false, authBusy=false, authErrorCode="", permissionDenied=false, cloudConnected=false, firebaseStarted=false;
 function syncConfigured(){ return typeof firebase!=="undefined" && !!FIREBASE_CONFIG.apiKey && !!FIREBASE_CONFIG.databaseURL; }
+function authAvailable(){ return firebaseStarted && typeof firebase!=="undefined" && !!firebase.auth; }
 function initSync(){
-  if(!syncConfigured()){ updateSyncBadge(false); return; }
+  if(!syncConfigured()){ updateSyncBadge(); renderAuthUI(); return; }
   try{
     firebase.initializeApp(FIREBASE_CONFIG);
+    firebaseStarted=true;
+    /* LOCAL persistence is Firebase's browser default, but it is set explicitly so a signed-in
+       phone or tablet survives closing the tab and does not re-prompt on every visit. */
+    firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(()=>{});
+    firebase.auth().onAuthStateChanged(user=>{
+      authReady=true; authBusy=false; authUser=user||null;
+      if(user) attachCloud(); else detachCloud();
+      updateSyncBadge(); renderAuthUI();
+      if(!editingActive()) render();
+    });
+  }catch(e){ syncing=false; updateSyncBadge(); renderAuthUI(); }
+}
+function signInWithGoogle(){
+  if(!authAvailable() || authBusy) return;
+  authBusy=true; authErrorCode=""; renderAuthUI();
+  const provider=new firebase.auth.GoogleAuthProvider();
+  firebase.auth().signInWithPopup(provider).catch(err=>{
+    const code=(err&&err.code)||"";
+    /* A blocked popup is the normal failure on phones and locked-down work browsers, so fall back
+       to a full-page redirect rather than dead-ending the sign-in. */
+    if(code==="auth/popup-blocked" || code==="auth/operation-not-supported-in-this-environment" || code==="auth/cancelled-popup-request"){
+      firebase.auth().signInWithRedirect(provider).catch(e2=>{ authBusy=false; authErrorCode=(e2&&e2.code)||"sign-in failed"; renderAuthUI(); });
+      return;
+    }
+    authBusy=false;
+    authErrorCode = code==="auth/popup-closed-by-user" ? "" : (code||"sign-in failed");
+    renderAuthUI();
+  });
+}
+function signOutOfGrind(){
+  if(!authAvailable()) return;
+  /* Signing out only detaches the cloud. localStorage is deliberately left completely untouched —
+     the planner keeps working, and nothing is destroyed by losing access to the remote copy. */
+  firebase.auth().signOut().catch(()=>{});
+}
+/* Attaches the live listeners. Called only from onAuthStateChanged with a real user. */
+function attachCloud(){
+  if(!authUser || !firebaseStarted) return;
+  permissionDenied=false;
+  try{
     db=firebase.database().ref("planners/"+APP_ID);
-    syncing=true; updateSyncBadge(true);
-    db.on("value", snap=>{
+    syncing=true;
+    db.on("value", applyGrindSnapshot, onCloudError);
+    firebase.database().ref(".info/connected").on("value", s=>{ cloudConnected = s.val()===true; if(syncing) updateSyncBadge(); });
+    attachFamilyLink();
+  }catch(e){ syncing=false; updateSyncBadge(); }
+}
+function detachCloud(){
+  try{ if(db) db.off(); }catch(e){}
+  clearTimeout(pushTimer);
+  db=null; syncing=false; remoteApplying=false; cloudConnected=false;
+  detachFamilyLink();
+}
+/* A read failure must NEVER be mistaken for "the cloud is empty" — that path seeds the cloud from
+   this device, so treating a permission error as an empty snapshot could push local state over
+   perfectly good remote data. Firebase routes denials here, to the error callback, precisely so the
+   success handler below never sees a null it might act on. */
+function onCloudError(err){
+  permissionDenied = !!err && (err.code==="PERMISSION_DENIED" || /permission/i.test(err.message||""));
+  detachCloud();
+  updateSyncBadge(); renderAuthUI();
+  if(!editingActive()) render();
+}
+/* True when this device is holding planner content worth seeding an empty cloud node with. Guards
+   the seed path below so a brand-new empty device can never blank an existing node. */
+function hasLocalPlannerData(){
+  return !!(tasks.length || shop.length || places.length || importantDates.length || bills.length ||
+            notes.length || beforeYouLeave.length || words.length || vault.length || ogSessions.length);
+}
+function applyGrindSnapshot(snap){
       const v=snap.val();
-      if(!v){ pushCloud(true); return; }                 // cloud empty → seed from this device
+      if(!v){ if(hasLocalPlannerData()) pushCloud(true); return; }   // cloud empty → seed from this device, but only if this device actually has something
       remoteApplying=true;
       let daddyRepaired=false;
       if(Array.isArray(v.people)){
@@ -1031,9 +1122,6 @@ function initSync(){
       // Data is always safe to merge in (every commit path re-fetches its entity by id), but a full render()
       // would blow away a focused inline editor's DOM — so defer the redraw until editing ends.
       if(!editingActive()) render(); else pendingRemoteRender=true;
-    });
-    firebase.database().ref(".info/connected").on("value", s=>{ if(syncing) updateSyncBadge(s.val()===true); });
-  }catch(e){ syncing=false; updateSyncBadge(false); }
 }
 function pushCloud(force){
   if(!syncing || (remoteApplying && !force)) return;
@@ -1044,11 +1132,52 @@ function pushCloud(force){
      protects future fields added the same way, but v1.4 tabs must still be closed/refreshed — see report. */
   pushTimer=setTimeout(()=>{ try{ db.update({people,tasks,shop,places,importantDates,bills,notes,beforeYouLeave,beforeYouLeaveTitle:bylTitle,words,vault,otherGrindSessions:ogSessions,otherGrindActive:ogActivePayload(),otherGrindSettings:ogSettings,updated:Date.now()}); }catch(e){} }, 250);
 }
-function updateSyncBadge(on){
+function updateSyncBadge(){
   const el=document.getElementById("syncBadge"); if(!el) return;
-  if(!syncConfigured()){ el.textContent="○ Local only"; el.style.color="var(--muted-2)"; el.title="Add your Firebase config to sync across devices"; return; }
-  el.textContent = on ? "● Synced" : "● Offline"; el.style.color = on ? "#23B877" : "var(--star)";
-  el.title = on ? "Live sync on" : "Reconnecting…";
+  const set=(txt,color,title)=>{ el.textContent=txt; el.style.color=color; el.title=title; };
+  if(!syncConfigured()) return set("○ Local only","var(--muted-2)","Add your Firebase config to sync across devices");
+  if(!authReady)        return set("○ Checking sign-in…","var(--muted-2)","Restoring your session");
+  if(!authUser)         return set("○ Signed out","var(--muted-2)","Saving on this device only — sign in to sync");
+  if(permissionDenied)  return set("⚠ Not authorised","var(--alarm)","This account isn't allowed to read this planner");
+  set(cloudConnected ? "● Synced" : "● Offline", cloudConnected ? "#23B877" : "var(--star)", cloudConnected ? "Live sync on" : "Reconnecting…");
+}
+/* The sign-in surface. Deliberately two states worth interrupting for and nothing else: signed out,
+   and signed in but refused by the rules. When sync is healthy this renders nothing at all. */
+function renderAuthUI(){
+  const btn=document.getElementById("authBtn"), who=document.getElementById("authWho"), notice=document.getElementById("authNotice");
+  if(!btn||!who||!notice) return;
+  if(!syncConfigured()){ btn.hidden=true; who.textContent=""; notice.classList.add("hidden"); notice.innerHTML=""; return; }
+
+  btn.hidden=false;
+  btn.disabled=authBusy;
+  btn.textContent = authBusy ? "Signing in…" : (authUser ? "Sign out" : "Sign in");
+  btn.onclick = authUser ? signOutOfGrind : signInWithGoogle;
+  who.textContent = authUser ? (authUser.email || authUser.displayName || "signed in") : "";
+  who.title = authUser ? (authUser.email||"") : "";
+
+  if(authUser && !permissionDenied){ notice.classList.add("hidden"); notice.innerHTML=""; return; }
+
+  notice.classList.remove("hidden");
+  notice.classList.toggle("warn", !!permissionDenied);
+  if(!authUser){
+    notice.innerHTML=`
+      <div class="an-title">Sign in to sync across your devices</div>
+      <div class="an-body">The Grind is working normally and saving on this device. Signing in with Google unlocks the shared copy, so the same planner and the same Other Grind sessions follow you between your phone, tablet, and computers.${authErrorCode?` <span style="color:var(--alarm)">Sign-in problem: ${esc(authErrorCode)}</span>`:""}</div>
+      <div class="an-actions"><button class="btn add" id="anSignIn"${authBusy?" disabled":""}>${authBusy?"Signing in…":"Sign in with Google"}</button></div>`;
+    const b=document.getElementById("anSignIn"); if(b) b.addEventListener("click", signInWithGoogle);
+    return;
+  }
+  /* Signed in but refused. This is also the one-time bootstrap state: the account's UID is shown so
+     it can be pasted into the database rules, which is the only way this account becomes the
+     authorised one. Nothing is synced, and nothing local is touched, while this is on screen. */
+  notice.innerHTML=`
+    <div class="an-title">This account isn't authorised for cloud sync</div>
+    <div class="an-body">Signed in as <b>${esc(authUser.email||authUser.displayName||"unknown")}</b>, but the database rules refused the read. The Grind is still saving normally on this device — nothing has been lost.<br>
+    If this is your own account, add this user ID to the Realtime Database rules:</div>
+    <div class="an-actions"><code id="anUid">${esc(authUser.uid)}</code><button class="btn sm" id="anCopy">Copy ID</button><button class="btn sm" id="anOut">Sign out</button></div>`;
+  const c=document.getElementById("anCopy");
+  if(c) c.addEventListener("click",()=>{ try{ const p=navigator.clipboard&&navigator.clipboard.writeText(authUser.uid); if(p&&p.catch) p.catch(()=>{}); c.textContent="Copied"; setTimeout(()=>{ c.textContent="Copy ID"; },1500); }catch(e){} });
+  const o=document.getElementById("anOut"); if(o) o.addEventListener("click", signOutOfGrind);
 }
 /* Restrained, shown only where useful — silent when Firebase isn't configured at all (that's
    already communicated by the sync badge above) and silent once things are working normally.
@@ -1057,6 +1186,9 @@ function renderFamilyLinkStatus(){
   const el=document.getElementById("familyLinkStatus"); if(!el) return;
   if(familyWriteErrorFlag){ el.textContent="Family link: couldn't save that change"; familyWriteErrorFlag=false; return; }
   if(!syncConfigured()){ el.textContent=""; return; }
+  /* Being signed out is an expected, communicated state — the sign-in notice already explains it,
+     so the link must not additionally cry "unavailable" as though something had broken. */
+  if(!authUser){ el.textContent=""; return; }
   el.textContent = familyLinkOk ? "" : "Family link unavailable";
 }
 
@@ -1083,12 +1215,23 @@ function applyFamilySnapshot(v){
   resolveDaddyProfile();
   if(!editingActive()) render(); else pendingRemoteRender=true;
 }
-function initFamilyLink(){
-  if(!syncConfigured()) return; // no Firebase configured at all — Grind loads normally, link simply stays off
+/* Family Planner lives at its own protected path, so the link is bound to the same sign-in as the
+   rest of cloud sync: attached by attachCloud() once a user is present, torn down on sign-out.
+   It is never attached speculatively — a signed-out client must not touch planners/ccafc-home. */
+function attachFamilyLink(){
+  if(!syncConfigured() || !authUser) return; // signed out — Grind loads normally, link simply stays off
   try{
     familyDb=firebase.database().ref("planners/"+FAMILY_APP_ID);
     familyDb.on("value", snap=>applyFamilySnapshot(snap.val()), ()=>{ familyLinkOk=false; if(!editingActive()) render(); });
   }catch(e){ /* family link unavailable — never blocks the rest of the app */ }
+}
+/* Drops the remote-only snapshots on sign-out. These are a read-through cache of Family Planner's
+   data and are never persisted into The Grind, so clearing them loses nothing; the linked-task rows
+   simply stop appearing until sign-in restores read access. */
+function detachFamilyLink(){
+  try{ if(familyDb) familyDb.off(); }catch(e){}
+  familyDb=null; familyPeopleSnapshot=[]; familyTasksSnapshot=[];
+  daddyFamilyId=null; familyLinkOk=false;
 }
 /* Guards against duplicate writes from one click; also lets a failed/aborted transaction show a
    single restrained status line without any manual state reconciliation — the linked task's
@@ -4309,7 +4452,7 @@ function tick(){ const d=new Date(); document.getElementById("clock").innerHTML=
 document.getElementById("datestr").textContent=new Date().toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric"});
 { const vp=loadJSON(K_PREFS); if(vp){ document.getElementById("showDone").checked=typeof vp.showDone==="boolean"?vp.showDone:(typeof vp.hideDone==="boolean"?!vp.hideDone:false); document.getElementById("showLater").checked=!!vp.showLater; document.getElementById("showSomeday").checked=!!vp.showSomeday; } }
 updateSoundToggleLabel();
-render(); initSync(); initFamilyLink(); tick(); setInterval(tick,1000);
+renderAuthUI(); render(); initSync(); tick(); setInterval(tick,1000);  // the family link is attached by attachCloud() once sign-in resolves
 </script>
 </body>
 </html>
