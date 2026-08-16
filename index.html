@@ -164,7 +164,10 @@
   .progress-count { font-family:var(--mono); font-size:13px; font-weight:600; }
   .bar { height:8px; background:var(--track); border-radius:99px; overflow:hidden; width:180px; }
   .bar > span { display:block; height:100%; width:0%; background:linear-gradient(90deg,var(--signal),#23B877); border-radius:99px; transition:width .35s ease; }
-  .util { display:flex; gap:8px; align-items:center; }
+  /* Wraps because this row now carries a sign-in control as well as the utility buttons, and on a
+     phone the un-wrapped row ran ~82px past the viewport — dragging the whole page into sideways
+     scroll. .head-right already wraps; this makes its inner row agree. */
+  .util { display:flex; gap:8px; align-items:center; flex-wrap:wrap; row-gap:6px; }
   .sync-badge { font-family:var(--mono); font-size:11px; font-weight:600; margin-right:2px; white-space:nowrap; }
   .family-link-status { font-family:var(--mono); font-size:11px; color:var(--muted-2); white-space:nowrap; }
   .family-link-status:empty { display:none; }
