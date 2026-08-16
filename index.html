@@ -379,7 +379,7 @@
   .cell-time .cd.late { color:var(--alarm); font-weight:600; }
   .overdue-chip { font-family:var(--mono); font-size:11px; font-weight:600; color:var(--alarm); margin-left:8px; white-space:nowrap; }
 
-  /* right sidebar: Quick notes (top), then Places to Go, Bills, Shopping */
+  /* right sidebar */
   .side { display:flex; flex-direction:column; gap:18px; }
   .notes { background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:14px; box-shadow:var(--shadow); }
   .note-list { display:flex; flex-direction:column; gap:6px; }
@@ -446,9 +446,9 @@
   .vault-row.favorite { border-left-color:var(--star); }
   .vault-row-head { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
   .vault-type-badge { font-family:var(--mono); font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; padding:2px 7px; border-radius:99px; border:1px solid var(--line); color:var(--muted); }
-  .vault-type-badge.bar { color:#3B97E6; border-color:#3B97E6; }
-  .vault-type-badge.quote { color:var(--signal-dim); border-color:var(--signal); }
-  .vault-type-badge.idea { color:#F2A81D; border-color:#F2A81D; }
+  .vault-type-badge.type-bar { color:#3B97E6; border-color:#3B97E6; }
+  .vault-type-badge.type-quote { color:var(--signal-dim); border-color:var(--signal); }
+  .vault-type-badge.type-idea { color:#F2A81D; border-color:#F2A81D; }
   .vault-source { font-size:11.5px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .vault-date { font-family:var(--mono); font-size:10px; color:var(--muted-2); margin-left:auto; white-space:nowrap; }
   .vault-text { font-size:13.5px; line-height:1.5; white-space:pre-wrap; word-break:break-word; overflow-wrap:anywhere; }
@@ -761,7 +761,9 @@
     </div>
 
     <div class="side">
-      <div class="notes">
+      <!-- Quick Notes is temporarily retired from the visible sidebar. Keep its hidden
+           DOM and data plumbing intact so existing notes remain available if restored. -->
+      <div class="notes hidden">
         <div class="panel-title">Quick notes <span class="shop-count" id="noteCount"></span></div>
         <div class="add-inline"><span class="plus">+</span><input id="noteInput" type="text" placeholder="Jot something down, then Enter…" aria-label="Add note"></div>
         <div class="note-list" id="noteList"></div>
@@ -785,7 +787,8 @@
         <div class="shop-foot"><span class="shop-count" id="billStatus"></span><button class="shop-clear" id="billClear">Clear paid</button></div>
       </div>
 
-      <div class="wordlab">
+      <!-- Word Lab is temporarily retired from the visible sidebar. -->
+      <div class="wordlab hidden">
         <div class="panel-title">Word Lab</div>
         <div class="wl-card" id="wlCard"></div>
       </div>
@@ -2836,7 +2839,7 @@ function renderVaultRow(v){
   const row=document.createElement("div"); row.className="vault-row"+(v.favorite?" favorite":""); row.dataset.id=v.id;
   row.innerHTML=`
     <div class="vault-row-head">
-      <span class="vault-type-badge ${v.type}">${esc(v.type)}</span>
+      <span class="vault-type-badge type-${v.type}">${esc(v.type)}</span>
       ${v.source?`<span class="vault-source">${esc(v.source)}</span>`:""}
       <span class="vault-date">${esc(fmtWhen(v.updated||v.created||Date.now()))}</span>
     </div>
