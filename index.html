@@ -945,6 +945,14 @@ const VERSION = "1.1-beta";
 /* Grind-namespaced keys — deliberately isolated from the old Family Planner fork's `home.*`
    keys, which live at the same browser origin (GitHub Pages paths don't isolate localStorage).
    Never read from or write to `home.*` here — that data belongs to the other app. */
+/* Firebase does not store empty arrays: writing shop:[] deletes the key outright. Every collection
+   below is then read back with "only overwrite if present", which correctly stops an OLD client
+   erasing data — but made an absent key indistinguishable from a list someone deliberately emptied.
+   So deleting the LAST item of anything never propagated: the key vanished, every other device kept
+   its copy, and the next device to save pushed the item straight back. PAYLOAD_V marks a writer that
+   always sends every collection, so for those payloads an absent array means empty. Payloads without
+   it (older clients) keep the original protective behaviour. Same fix as the family planner's. */
+const PAYLOAD_V=2;
 const K_TASKS="grind.plan.v1", K_SHOP="grind.shopping.v1", K_PEOPLE="grind.profiles.v1", K_PLACES="grind.places.v1", K_DATES="grind.dates.v1", K_BILLS="grind.bills.v1", K_PREFS="grind.viewprefs.v1", K_NOTES="grind.notes.v1", K_SETTINGS="grind.settings.v1", K_BYL="grind.before-you-leave.v1", K_BYL_TITLE="grind.before-you-leave-title.v1", K_ACTIVE_PROFILES="grind.activeProfiles.v1", K_FOCUS_PRESETS="grind.focusPresets.v1", K_WORDS="grind.words.v1", K_VAULT="grind.vault.v1";
 function loadJSON(k){ try{ const r=localStorage.getItem(k); if(r) return JSON.parse(r); }catch(e){} return null; }
 function saveTasks(){ try{ localStorage.setItem(K_TASKS, JSON.stringify(tasks)); }catch(e){} pushCloud(); return true; }
@@ -1098,17 +1106,22 @@ function applyGrindSnapshot(snap){
         // after remoteApplying is reset to false.
         if(daddyFamilyId) daddyRepaired=ensureGrindDaddyProfile();
       }
-      if(Array.isArray(v.tasks))  tasks=v.tasks.map(migrateTask);
-      if(Array.isArray(v.shop))   shop=v.shop.map(s=>Object.assign(blankShop(),s));
-      if(Array.isArray(v.places)) places=v.places.map(migratePlace);   // only overwrite if present → never erased by an old client
-      if(Array.isArray(v.importantDates)) importantDates=v.importantDates.map(migrateImportantDate); // same rule → older clients never erase this
-      if(Array.isArray(v.bills)) bills=v.bills.map(migrateBill);       // same rule → older clients never erase this
-      if(Array.isArray(v.notes)) notes=v.notes.map(migrateNote).filter(n=>n.text!=="");       // same rule → older clients never erase this
-      if(Array.isArray(v.beforeYouLeave)) beforeYouLeave=v.beforeYouLeave.map(migrateBYLItem).filter(b=>b.item!=="");  // same rule → older clients never erase this
+      /* `full` = this payload came from a writer that always sends every collection, so a missing
+         array genuinely means "emptied" and the deletion must be applied. `people` is deliberately
+         excluded: an empty profile list is never intended and would take the app's structure with it. */
+      const full = Number(v.payloadV)>=2;
+      const listOrEmpty=(raw,map)=>Array.isArray(raw) ? raw.map(map) : (full?[]:null);
+      { const x=listOrEmpty(v.tasks,migrateTask); if(x) tasks=x; }
+      { const x=listOrEmpty(v.shop,s=>Object.assign(blankShop(),s)); if(x) shop=x; }
+      { const x=listOrEmpty(v.places,migratePlace); if(x) places=x; }
+      { const x=listOrEmpty(v.importantDates,migrateImportantDate); if(x) importantDates=x; }
+      { const x=listOrEmpty(v.bills,migrateBill); if(x) bills=x; }
+      { const x=listOrEmpty(v.notes,migrateNote); if(x) notes=x.filter(n=>n.text!==""); }
+      { const x=listOrEmpty(v.beforeYouLeave,migrateBYLItem); if(x) beforeYouLeave=x.filter(b=>b.item!==""); }
       if(typeof v.beforeYouLeaveTitle==="string" && v.beforeYouLeaveTitle.trim()!=="") bylTitle=normalizeBYLTitle(v.beforeYouLeaveTitle);  // malformed/blank remote titles must never overwrite the local title
-      if(Array.isArray(v.words)) words=v.words.map(migrateWordEntry).filter(Boolean); // same rule → an older payload with no words field never erases local Word Lab data
-      if(Array.isArray(v.vault)) vault=v.vault.map(migrateVaultEntry).filter(Boolean); // same rule → an older payload with no vault field never erases local Vault data
-      if(Array.isArray(v.otherGrindSessions)) ogSessions=v.otherGrindSessions.map(ogMigrateSession).filter(Boolean).sort((a,b)=>a.startTimestamp-b.startTimestamp); // same rule → an older payload never erases session history
+      { const x=listOrEmpty(v.words,migrateWordEntry); if(x) words=x.filter(Boolean); }
+      { const x=listOrEmpty(v.vault,migrateVaultEntry); if(x) vault=x.filter(Boolean); }
+      { const x=listOrEmpty(v.otherGrindSessions,ogMigrateSession); if(x) ogSessions=x.filter(Boolean).sort((a,b)=>a.startTimestamp-b.startTimestamp); }
       /* The active session is the one field where ABSENCE can't mean "leave it alone": stopping a
          session on another device has to be able to clear this one. Hence the explicit
          {mode:"idle"} sentinel — undefined still means "an older client wrote this payload". */
@@ -1133,7 +1146,7 @@ function pushCloud(force){
      Since a stale v1.4 tab's set() has no importantDates key, its set() would still erase importantDates
      (update() only protects against writers that also use update() with a partial payload); this change
      protects future fields added the same way, but v1.4 tabs must still be closed/refreshed — see report. */
-  pushTimer=setTimeout(()=>{ try{ db.update({people,tasks,shop,places,importantDates,bills,notes,beforeYouLeave,beforeYouLeaveTitle:bylTitle,words,vault,otherGrindSessions:ogSessions,otherGrindActive:ogActivePayload(),otherGrindSettings:ogSettings,updated:Date.now()}); }catch(e){} }, 250);
+  pushTimer=setTimeout(()=>{ try{ db.update({people,tasks,shop,places,importantDates,bills,notes,beforeYouLeave,beforeYouLeaveTitle:bylTitle,words,vault,otherGrindSessions:ogSessions,otherGrindActive:ogActivePayload(),otherGrindSettings:ogSettings,payloadV:PAYLOAD_V,updated:Date.now()}); }catch(e){} }, 250);
 }
 function updateSyncBadge(){
   const el=document.getElementById("syncBadge"); if(!el) return;
