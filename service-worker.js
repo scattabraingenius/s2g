@@ -1,4 +1,4 @@
-const CACHE_NAME = "scattabrain-unified-shell-v2";
+const CACHE_NAME = "scattabrain-unified-shell-v3";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -9,7 +9,9 @@ const APP_SHELL = [
   "./apple-touch-icon.png",
   "./icon-192.png",
   "./icon-512.png",
-  "./icon-maskable-512.png"
+  "./icon-maskable-512.png",
+  "./mm-home-icon-64.png",
+  "./mm-home-icon-512.png"
 ];
 
 self.addEventListener("install", event => {

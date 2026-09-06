@@ -176,6 +176,7 @@
   .global-navbtn:focus-visible { outline:2px solid var(--signal); outline-offset:2px; }
   .global-navbtn[aria-current="page"] { background:var(--signal); border-color:var(--signal); color:#1A0930; }
   .global-nav-icon { font-size:17px; line-height:1; }
+  .global-nav-icon-img { width:20px; height:20px; border-radius:6px; object-fit:cover; flex:none; }
   @media (max-width:560px){
     .global-appbar-inner { padding:5px 12px; }
     .global-nav { width:100%; }
@@ -703,11 +704,11 @@
   <div class="global-appbar-inner">
     <nav class="global-nav" aria-label="Apps">
       <a class="global-navbtn" href="./" aria-current="page">
-        <span class="global-nav-icon" aria-hidden="true">🧠</span>
+        <img class="global-nav-icon-img" src="./favicon-32.png" alt="">
         <span class="global-nav-label">ScattaBrain</span>
       </a>
       <a class="global-navbtn" href="./mm-home/">
-        <span class="global-nav-icon" aria-hidden="true">🏠</span>
+        <img class="global-nav-icon-img" src="./mm-home-icon-64.png" alt="">
         <span class="global-nav-label">MM..HOME</span>
       </a>
     </nav>
