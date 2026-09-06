@@ -3,7 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>The Grind</title>
+<meta name="theme-color" content="#0C0812">
+<meta name="color-scheme" content="dark">
+<meta name="application-name" content="ScattaBrain to Genius">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="ScattaBrain">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
+<title>ScattaBrain to Genius</title>
 <style>
   /* ============================================================
      THE GRIND — personal command center   (v1.1-beta)
@@ -150,6 +160,28 @@
   .wrap { max-width:1160px; margin:0 auto; padding:20px 20px 80px; }
   .hidden { display:none !important; }
   .eyebrow { font-family:var(--mono); font-size:10px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted-2); }
+
+  /* Persistent app switcher — shared visual language with MM..HOME's sticky app bar. */
+  .global-appbar { position:sticky; top:0; z-index:70; background:rgba(12,8,18,.92);
+    backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--line); box-shadow:0 6px 24px rgba(0,0,0,.35); }
+  @supports not (backdrop-filter:blur(2px)) { .global-appbar { background:var(--paper); } }
+  .global-appbar-inner { max-width:1160px; margin:0 auto; padding:7px 20px; }
+  .global-nav { display:flex; align-items:center; justify-content:flex-end; gap:6px; }
+  .global-navbtn { display:inline-flex; align-items:center; justify-content:center; gap:7px;
+    min-height:42px; padding:8px 14px; border:1px solid var(--line); border-radius:11px;
+    background:var(--card); color:var(--ink); font-size:14px; font-weight:700;
+    text-decoration:none; box-shadow:none; white-space:nowrap; }
+  .global-navbtn:hover { border-color:var(--signal-dim); }
+  .global-navbtn:focus-visible { outline:2px solid var(--signal); outline-offset:2px; }
+  .global-navbtn[aria-current="page"] { background:var(--signal); border-color:var(--signal); color:#1A0930; }
+  .global-nav-icon { font-size:17px; line-height:1; }
+  @media (max-width:560px){
+    .global-appbar-inner { padding:5px 12px; }
+    .global-nav { width:100%; }
+    .global-navbtn { flex:1 1 50%; min-width:0; flex-direction:column; gap:2px; padding:6px 4px; }
+    .global-nav-label { font-size:10px; letter-spacing:.01em; }
+  }
 
   /* header */
   header.top { display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:16px; }
@@ -667,11 +699,25 @@
 </style>
 </head>
 <body>
+<header class="global-appbar">
+  <div class="global-appbar-inner">
+    <nav class="global-nav" aria-label="Apps">
+      <a class="global-navbtn" href="./" aria-current="page">
+        <span class="global-nav-icon" aria-hidden="true">🧠</span>
+        <span class="global-nav-label">ScattaBrain</span>
+      </a>
+      <a class="global-navbtn" href="./mm-home/">
+        <span class="global-nav-icon" aria-hidden="true">🏠</span>
+        <span class="global-nav-label">MM..HOME</span>
+      </a>
+    </nav>
+  </div>
+</header>
 <div class="wrap">
 
   <header class="top">
     <div class="brand">
-      <h1>The Grind</h1>
+      <h1>ScattaBrain to Genius</h1>
       <div><div class="eyebrow">Personal command center</div><div class="datestr" id="datestr"></div></div>
     </div>
     <div class="head-right">
@@ -4469,6 +4515,11 @@ document.getElementById("datestr").textContent=new Date().toLocaleDateString(und
 { const vp=loadJSON(K_PREFS); if(vp){ document.getElementById("showDone").checked=typeof vp.showDone==="boolean"?vp.showDone:(typeof vp.hideDone==="boolean"?!vp.hideDone:false); document.getElementById("showLater").checked=!!vp.showLater; document.getElementById("showSomeday").checked=!!vp.showSomeday; } }
 updateSoundToggleLabel();
 renderAuthUI(); render(); initSync(); tick(); setInterval(tick,1000);  // the family link is attached by attachCloud() once sign-in resolves
+if("serviceWorker" in navigator && (location.protocol==="https:" || location.hostname==="localhost" || location.hostname==="127.0.0.1")){
+  window.addEventListener("load",()=>{
+    navigator.serviceWorker.register("./service-worker.js").catch(err=>console.warn("ScattaBrain service worker registration failed:",err));
+  });
+}
 </script>
 </body>
 </html>
