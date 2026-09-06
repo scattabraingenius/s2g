@@ -65,7 +65,7 @@ async function assertNoHorizontalOverflow(page, label) {
       return { scope: ready.scope, caches: await caches.keys() };
     });
     assert(registration.scope.endsWith("/"), "Unified service worker scope is incorrect");
-    assert(registration.caches.includes("scattabrain-unified-shell-v1"), "Unified app shell cache was not created");
+    assert(registration.caches.includes("scattabrain-unified-shell-v2"), "Unified app shell cache was not created");
 
     await context.setOffline(true);
     await page.goto(`${BASE}/mm-home/`, { waitUntil: "domcontentloaded" });

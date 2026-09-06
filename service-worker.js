@@ -1,4 +1,4 @@
-const CACHE_NAME = "scattabrain-unified-shell-v1";
+const CACHE_NAME = "scattabrain-unified-shell-v2";
 const APP_SHELL = [
   "./",
   "./index.html",
