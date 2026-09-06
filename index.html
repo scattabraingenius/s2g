@@ -176,11 +176,12 @@
   .global-navbtn:focus-visible { outline:2px solid var(--signal); outline-offset:2px; }
   .global-navbtn[aria-current="page"] { background:var(--signal); border-color:var(--signal); color:#1A0930; }
   .global-nav-icon { font-size:17px; line-height:1; }
-  .global-nav-icon-img { width:20px; height:20px; border-radius:6px; object-fit:cover; flex:none; }
+  .global-nav-icon-img { width:30px; height:30px; border-radius:8px; object-fit:cover; flex:none; }
   @media (max-width:560px){
     .global-appbar-inner { padding:5px 12px; }
     .global-nav { width:100%; }
     .global-navbtn { flex:1 1 50%; min-width:0; flex-direction:column; gap:2px; padding:6px 4px; }
+    .global-nav-icon-img { width:28px; height:28px; }
     .global-nav-label { font-size:10px; letter-spacing:.01em; }
   }
 
@@ -705,7 +706,7 @@
     <nav class="global-nav" aria-label="Apps">
       <a class="global-navbtn" href="./" aria-current="page">
         <img class="global-nav-icon-img" src="./favicon-32.png" alt="">
-        <span class="global-nav-label">ScattaBrain</span>
+        <span class="global-nav-label">SB2G</span>
       </a>
       <a class="global-navbtn" href="./mm-home/">
         <img class="global-nav-icon-img" src="./mm-home-icon-64.png" alt="">

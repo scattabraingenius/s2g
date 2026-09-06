@@ -35,6 +35,9 @@ async function assertNoHorizontalOverflow(page, label) {
     assert(await page.title() === "ScattaBrain to Genius", "Unexpected ScattaBrain page title");
     assert(await page.locator(".global-navbtn").count() === 2, "ScattaBrain app switcher should have two buttons");
     assert(await page.locator('.global-navbtn[aria-current="page"]').count() === 1, "ScattaBrain current-page state is missing");
+    assert(await page.locator('.global-navbtn[aria-current="page"] .global-nav-label').textContent() === "SB2G", "ScattaBrain switcher label should be SB2G");
+    assert(await page.locator('.global-nav-icon-img').count() === 2, "Both app switcher buttons should use branded icons");
+    assert(await page.locator('.global-nav-icon-img').evaluateAll(images => images.every(image => image.complete && image.naturalWidth > 0)), "App switcher icons did not load");
     await assertNoHorizontalOverflow(page, "ScattaBrain phone view");
 
     const stickyPosition = await page.locator(".global-appbar").evaluate(el => getComputedStyle(el).position);
@@ -45,6 +48,8 @@ async function assertNoHorizontalOverflow(page, label) {
     await page.waitForURL("**/mm-home/");
     assert(await page.title() === "MM..HOME", "Unexpected MM..HOME page title");
     assert(await page.locator('.app-switch-link[href="../"]').count() === 1, "MM..HOME return button is missing");
+    assert(await page.locator('.app-switch-link .navbtn-label').textContent() === "SB2G", "MM..HOME return button label should be SB2G");
+    assert(await page.locator('.app-switch-icon').evaluate(image => image.complete && image.naturalWidth > 0), "MM..HOME return icon did not load");
     assert(await page.locator("#appNav .navbtn").count() === 6, "MM..HOME should show one app switch plus five page buttons");
     await assertNoHorizontalOverflow(page, "MM..HOME phone view");
     await page.screenshot({ path: path.join(artifacts, "unified-phone-mm-home.png"), fullPage: false });
@@ -65,7 +70,7 @@ async function assertNoHorizontalOverflow(page, label) {
       return { scope: ready.scope, caches: await caches.keys() };
     });
     assert(registration.scope.endsWith("/"), "Unified service worker scope is incorrect");
-    assert(registration.caches.includes("scattabrain-unified-shell-v3"), "Unified app shell cache was not created");
+    assert(registration.caches.includes("scattabrain-unified-shell-v4"), "Unified app shell cache was not created");
 
     await context.setOffline(true);
     await page.goto(`${BASE}/mm-home/`, { waitUntil: "domcontentloaded" });
