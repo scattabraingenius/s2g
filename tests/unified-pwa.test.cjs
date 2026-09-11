@@ -31,34 +31,67 @@ async function assertNoHorizontalOverflow(page, label) {
     const pageErrors = [];
     page.on("pageerror", error => pageErrors.push(error.message));
 
+    /* The shared app bar (2026-09-11): the same component on both pages. */
+    const checkSharedBar = async (label) => {
+      assert(await page.locator('.appbar').evaluate(el => getComputedStyle(el).position) === "sticky", `${label}: app bar is not sticky`);
+      assert(/^\d\d:\d\d/.test(await page.locator("#clock").innerText()), `${label}: live clock is missing`);
+      assert((await page.locator("#datestrDay").innerText()).length > 0 && /\d{4}$/.test(await page.locator("#datestr").innerText()), `${label}: two-line date is missing`);
+      assert(await page.locator(".ab-sb2g img").evaluate(image => image.complete && image.naturalWidth > 0), `${label}: SB2G icon did not load`);
+      assert(await page.locator("#appNav > .navbtn").count() === 5, `${label}: expected Home, Calendar, Agenda, Time and Life Admin`);
+      assert(await page.locator("#lifeAdminPanel .la-link").count() === 4, `${label}: Life Admin should hold EHAH, Clothing, Chores and Bank`);
+      assert(await page.locator(".nav-ico").evaluateAll(images => images.length === 9 && images.every(image => image.complete && image.naturalWidth > 0)), `${label}: nav icons did not load`);
+      assert(!/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(await page.locator("#appNav").innerText()), `${label}: emoji remain in the nav`);
+    };
+
     await page.goto(`${BASE}/`, { waitUntil: "domcontentloaded" });
     assert(await page.title() === "ScattaBrain to Genius", "Unexpected ScattaBrain page title");
-    assert(await page.locator(".global-navbtn").count() === 2, "ScattaBrain app switcher should have two buttons");
-    assert(await page.locator('.global-navbtn[aria-current="page"]').count() === 1, "ScattaBrain current-page state is missing");
-    assert(await page.locator('.global-navbtn[aria-current="page"] .global-nav-label').textContent() === "SB2G", "ScattaBrain switcher label should be SB2G");
-    assert(await page.locator('.global-nav-icon-img').count() === 2, "Both app switcher buttons should use branded icons");
-    assert(await page.locator('.global-nav-icon-img').evaluateAll(images => images.every(image => image.complete && image.naturalWidth > 0)), "App switcher icons did not load");
+    await checkSharedBar("ScattaBrain");
+    assert(await page.locator('#sb2gLink[aria-current="page"]').count() === 1, "SB2G current-page state is missing");
+    assert(await page.getByText("Personal command center").count() === 0, "Old SB2G subtitle is still rendered");
+    assert(await page.locator("#timeView").isHidden() && await page.locator("#nextup").isHidden() && await page.locator("#datesSection").isHidden(), "Grind, Up Next or Important Dates still show on the dashboard");
+    for (const id of ["soundToggle", "printBtn", "exportBtn", "importBtn"]) {
+      assert(await page.locator(`.tools #${id}`).count() === 1, `SB2G footer is missing #${id}`);
+    }
     await assertNoHorizontalOverflow(page, "ScattaBrain phone view");
-
-    const stickyPosition = await page.locator(".global-appbar").evaluate(el => getComputedStyle(el).position);
-    assert(stickyPosition === "sticky", "ScattaBrain app switcher is not sticky");
     await page.screenshot({ path: path.join(artifacts, "unified-phone-scattabrain.png"), fullPage: false });
 
-    await page.locator('.global-navbtn[href="./mm-home/"]').click();
+    await page.locator('#appNav a[data-page="time"]').click();
+    assert((await page.url()).endsWith("/#time") && await page.locator("#timeView").isVisible(), "SB2G Time view did not open");
+    assert(await page.locator(".og-eyebrow").textContent() === "The Grind", "The Grind label is wrong");
+
+    /* Life Admin: click toggles, Escape closes and returns focus, keyboard opens and reaches links. */
+    const trigger = page.locator("#lifeAdminTrigger");
+    await trigger.click();
+    assert(await trigger.getAttribute("aria-expanded") === "true" && await page.locator("#lifeAdminPanel").isVisible(), "Life Admin did not open on click");
+    await assertNoHorizontalOverflow(page, "Life Admin open on a phone");
+    await page.keyboard.press("Escape");
+    assert(await trigger.getAttribute("aria-expanded") === "false", "Escape did not close Life Admin");
+    assert(await trigger.evaluate(el => el === document.activeElement), "Escape did not return focus to Life Admin");
+    await page.keyboard.press("Enter");
+    assert(await trigger.getAttribute("aria-expanded") === "true", "Enter did not open Life Admin");
+    await page.keyboard.press("Tab");
+    assert(await page.evaluate(() => document.activeElement.dataset.page) === "ehah", "Tab did not move into the Life Admin links");
+    await page.mouse.click(5, 700);
+    assert(await trigger.getAttribute("aria-expanded") === "false", "Outside click did not close Life Admin");
+
+    await page.locator('#appNav a[data-page="home"]').click();
     await page.waitForURL("**/mm-home/");
     assert(await page.title() === "MM..HOME", "Unexpected MM..HOME page title");
-    assert(await page.locator('.app-switch-link[href="../"]').count() === 1, "MM..HOME return button is missing");
-    assert(await page.locator('.app-switch-link .navbtn-label').textContent() === "SB2G", "MM..HOME return button label should be SB2G");
-    assert(await page.locator('.app-switch-icon').evaluate(image => image.complete && image.naturalWidth > 0), "MM..HOME return icon did not load");
-    assert(await page.locator("#appNav .navbtn").count() === 6, "MM..HOME should show one app switch plus five page buttons");
+    await checkSharedBar("MM..HOME");
+    assert(await page.locator('#sb2gLink[href="../"]').count() === 1, "MM..HOME return button is missing");
     await assertNoHorizontalOverflow(page, "MM..HOME phone view");
     await page.screenshot({ path: path.join(artifacts, "unified-phone-mm-home.png"), fullPage: false });
 
-    await page.locator('button[data-page="calendar"]').click();
+    await page.locator('#appNav a[data-page="calendar"]').click();
     assert((await page.url()).endsWith("/mm-home/#calendar"), "MM..HOME Calendar route did not activate");
-    assert(await page.locator('button[data-page="calendar"][aria-current="page"]').count() === 1, "Calendar current-page state is missing");
+    assert(await page.locator('#appNav a[data-page="calendar"][aria-current="page"]').count() === 1, "Calendar current-page state is missing");
 
-    await page.locator('.app-switch-link[href="../"]').click();
+    await page.locator("#lifeAdminTrigger").click();
+    await page.locator('.la-link[data-page="bank"]').click();
+    assert((await page.url()).endsWith("/mm-home/#bank") && await page.locator("#bankPage").isVisible(), "Bank did not open from Life Admin");
+    assert(await page.locator("#lifeAdminTrigger.is-current").count() === 1, "Life Admin active state is missing on Bank");
+
+    await page.locator('#sb2gLink[href="../"]').click();
     await page.waitForURL(url => url.pathname.endsWith("/"));
     assert(await page.title() === "ScattaBrain to Genius", "Return to ScattaBrain failed");
 
@@ -70,7 +103,7 @@ async function assertNoHorizontalOverflow(page, label) {
       return { scope: ready.scope, caches: await caches.keys() };
     });
     assert(registration.scope.endsWith("/"), "Unified service worker scope is incorrect");
-    assert(registration.caches.includes("scattabrain-unified-shell-v4"), "Unified app shell cache was not created");
+    assert(registration.caches.some(key => key.startsWith("scattabrain-unified-shell-v5-")), "Unified app shell cache was not created");
 
     await context.setOffline(true);
     await page.goto(`${BASE}/mm-home/`, { waitUntil: "domcontentloaded" });
@@ -86,10 +119,10 @@ async function assertNoHorizontalOverflow(page, label) {
     await page.goto(`${BASE}/tests/og-engine.test.html`, { waitUntil: "networkidle" });
     await page.waitForFunction(() => document.querySelector("#summary")?.classList.contains("pass"), null, { timeout: 10000 });
     const engineSummary = await page.locator("#summary").innerText();
-    assert(/pass/i.test(engineSummary), `The Other Grind engine tests did not pass: ${engineSummary}`);
+    assert(/pass/i.test(engineSummary), `The Grind engine tests did not pass: ${engineSummary}`);
     assert(pageErrors.length === 0, `Browser page errors were reported: ${pageErrors.join(" | ")}`);
 
-    console.log("Unified PWA checks passed: phone/desktop layout, navigation, service worker, and Other Grind engine.");
+    console.log("Unified PWA checks passed: shared app bar, Life Admin, Time, Bank, phone/desktop layout, service worker, and Grind engine.");
   } finally {
     await browser.close();
   }

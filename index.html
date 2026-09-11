@@ -161,50 +161,132 @@
   .hidden { display:none !important; }
   .eyebrow { font-family:var(--mono); font-size:10px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted-2); }
 
-  /* Persistent app switcher — shared visual language with MM..HOME's sticky app bar. */
-  .global-appbar { position:sticky; top:0; z-index:70; background:rgba(12,8,18,.92);
-    backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
-    border-bottom:1px solid var(--line); box-shadow:0 6px 24px rgba(0,0,0,.35); }
-  @supports not (backdrop-filter:blur(2px)) { .global-appbar { background:var(--paper); } }
-  .global-appbar-inner { max-width:1160px; margin:0 auto; padding:7px 20px; }
-  .global-nav { display:flex; align-items:center; justify-content:flex-end; gap:6px; }
-  .global-navbtn { display:inline-flex; align-items:center; justify-content:center; gap:7px;
-    min-height:42px; padding:8px 14px; border:1px solid var(--line); border-radius:11px;
-    background:var(--card); color:var(--ink); font-size:14px; font-weight:700;
-    text-decoration:none; box-shadow:none; white-space:nowrap; }
-  .global-navbtn:hover { border-color:var(--signal-dim); }
-  .global-navbtn:focus-visible { outline:2px solid var(--signal); outline-offset:2px; }
-  .global-navbtn[aria-current="page"] { background:var(--signal); border-color:var(--signal); color:#1A0930; }
-  .global-nav-icon { font-size:17px; line-height:1; }
-  .global-nav-icon-img { width:30px; height:30px; border-radius:8px; object-fit:cover; flex:none; }
-  @media (max-width:560px){
-    .global-appbar-inner { padding:5px 12px; }
-    .global-nav { width:100%; }
-    .global-navbtn { flex:1 1 50%; min-width:0; flex-direction:column; gap:2px; padding:6px 4px; }
-    .global-nav-icon-img { width:28px; height:28px; }
-    .global-nav-label { font-size:10px; letter-spacing:.01em; }
-  }
+  /* shared-appbar:start
+     SHARED APP BAR (2026-09-11) — one component for ScattaBrain to Genius and MM..HOME.
+     Keep this block identical in both index.html files: scripts/update-mm-home.py refuses to
+     embed MM..HOME while they differ. Colours are scoped to the bar so SB2G's purple page theme
+     and MM..HOME's pink one render the same bar. */
+  .appbar { --ab-paper:#10080D; --ab-card:#1D1018; --ab-hover:#2A1722; --ab-line:#4A263A; --ab-ink:#F7EAF1;
+            --ab-muted:#8E6B7D; --ab-pink:#EC4899; --ab-pink-soft:#F9A8D4; --ab-on-pink:#2A0716; --ab-star:#F2C14E;
+            position:sticky; top:0; z-index:60; color:var(--ab-ink); background:rgba(16,8,13,.92);
+            backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+            border-bottom:1px solid var(--ab-line); box-shadow:0 6px 24px rgba(0,0,0,.35); }
+  @supports not (backdrop-filter:blur(2px)) { .appbar { background:var(--ab-paper); } }
+  .ab-inner { max-width:1280px; margin:0 auto; padding:8px 20px; display:flex; align-items:center; gap:12px; }
 
-  /* header */
-  header.top { display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:16px; }
-  .brand { display:flex; align-items:baseline; gap:12px; }
-  .brand h1 { font-size:26px; margin:0; letter-spacing:-.02em; font-weight:800; }
-  .brand .datestr { font-family:var(--mono); font-size:12px; color:var(--muted); }
-  .head-right { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
-  .clock { font-family:var(--mono); font-size:20px; font-weight:600; }
-  .clock .sec { color:var(--signal); }
+  .ab-sb2g { display:inline-flex; align-items:center; gap:7px; flex:none; min-height:46px; padding:5px 12px 5px 6px;
+             border:1px solid var(--ab-line); border-radius:12px; background:var(--ab-card); color:var(--ab-ink);
+             font-family:var(--sans); font-size:14px; font-weight:700; line-height:1; text-decoration:none; white-space:nowrap; }
+  .ab-sb2g img { width:34px; height:34px; border-radius:9px; object-fit:cover; flex:none; display:block; }
+  .ab-sb2g:hover { border-color:var(--ab-pink-soft); }
+  .ab-sb2g[aria-current="page"] { background:var(--ab-pink); border-color:var(--ab-pink); color:var(--ab-on-pink); }
+
+  /* The clock is the strongest thing in the bar: it takes the bar's height, never the nav's width. */
+  .ab-time { display:flex; align-items:center; gap:10px; flex:none; min-width:0; }
+  .ab-clock { font-family:var(--mono); font-size:36px; font-weight:800; line-height:1; letter-spacing:-.03em;
+              font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .ab-clock .sec { color:var(--ab-pink); font-size:.52em; font-weight:700; letter-spacing:0; }
+  .ab-brand { display:flex; flex-direction:column; justify-content:center; gap:1px; min-width:0; line-height:1.15; }
+  .ab-day { font-size:15px; font-weight:800; letter-spacing:-.01em; white-space:nowrap; }
+  .ab-date { font-family:var(--mono); font-size:11px; color:var(--ab-muted); letter-spacing:.02em; white-space:nowrap; }
+  /* Empty on purpose: the room future bar icons will use. Today it is what pushes the nav right. */
+  .ab-reserved { flex:1 1 auto; min-width:0; }
+
+  .ab-nav { display:flex; align-items:center; gap:6px; flex-wrap:nowrap; min-width:0; }
+  .ab-nav .navbtn { position:relative; flex:0 0 auto; display:inline-flex; align-items:center; justify-content:center; gap:7px;
+                    min-height:44px; padding:8px 13px; border:1px solid var(--ab-line); border-radius:11px;
+                    background:var(--ab-card); color:var(--ab-ink); font-family:var(--sans); font-size:14px; font-weight:700;
+                    line-height:1.1; letter-spacing:0; text-decoration:none; white-space:nowrap; cursor:pointer; box-shadow:none; }
+  .ab-nav .navbtn:hover { border-color:var(--ab-pink-soft); }
+  .ab-nav .navbtn[aria-current="page"], .ab-nav .navbtn.is-current { background:var(--ab-pink); border-color:var(--ab-pink); color:var(--ab-on-pink); }
+  .ab-sb2g:focus-visible, .ab-nav .navbtn:focus-visible, .la-link:focus-visible { outline:2px solid var(--ab-pink-soft); outline-offset:2px; }
+  .nav-ico { width:22px; height:22px; object-fit:contain; flex:none; display:block; }
+  .ab-nav .navbtn-label { display:inline-flex; align-items:center; gap:4px; }
+  .la-chev { width:10px; height:10px; flex:none; transition:transform .15s ease; }
+  .la-trigger[aria-expanded="true"] .la-chev { transform:rotate(180deg); }
+  .nav-badge { display:inline-grid; place-items:center; min-width:18px; height:18px; padding:0 5px; border-radius:99px;
+               background:var(--ab-star); color:#2A1A00; font-family:var(--mono); font-size:11px; font-weight:800; line-height:1; }
+  .ab-nav .navbtn[aria-current="page"] .nav-badge, .ab-nav .navbtn.is-current .nav-badge { background:var(--ab-on-pink); color:var(--ab-star); }
+  .nav-dot { position:absolute; top:5px; right:5px; width:9px; height:9px; border-radius:50%; background:#23B877;
+             box-shadow:0 0 0 2px var(--ab-card); }
+  .nav-dot.due { background:#F0575C; }
+
+  /* Life Admin flyout. It sits inside the nav so Tab reaches it straight after its trigger, but its
+     containing block is the sticky bar, so the phone nav's sideways scroll can never clip it.
+     placeLifeAdminPanel() puts it under the trigger and keeps it inside the viewport. */
+  .la-panel { position:absolute; z-index:80; top:0; left:0; min-width:220px; display:grid; gap:2px; padding:6px;
+              overflow-y:auto; background:var(--ab-card); border:1px solid var(--ab-line); border-radius:14px;
+              box-shadow:0 16px 40px rgba(0,0,0,.55); }
+  .la-panel[hidden] { display:none; }
+  .la-link { position:relative; display:flex; align-items:center; gap:11px; min-height:44px; padding:8px 12px 8px 9px;
+             border-radius:10px; color:var(--ab-ink); font-family:var(--sans); font-size:15px; font-weight:700;
+             line-height:1.2; text-decoration:none; white-space:nowrap; }
+  .la-link .nav-ico { width:26px; height:26px; }
+  .la-link:hover { background:var(--ab-hover); }
+  .la-link[aria-current="page"] { background:var(--ab-pink); color:var(--ab-on-pink); }
+  .la-link .nav-badge { margin-left:auto; }
+  .la-link[aria-current="page"] .nav-badge { background:var(--ab-on-pink); color:var(--ab-star); }
+
+  @media (max-width:1080px){
+    .ab-nav .navbtn { padding:8px 10px; font-size:13px; gap:6px; }
+    .ab-clock { font-size:32px; }
+  }
+  @media (max-width:820px){
+    /* Two rows: identity above, a full-width nav below that scrolls sideways before it squeezes. */
+    .ab-inner { flex-wrap:wrap; gap:8px 10px; padding:7px 12px; }
+    .ab-nav { order:4; flex-basis:100%; overflow-x:auto; scrollbar-width:none; -webkit-overflow-scrolling:touch; padding-bottom:1px; }
+    .ab-nav::-webkit-scrollbar { display:none; }
+    .ab-nav .navbtn { flex:1 0 auto; }
+    .ab-clock { font-size:30px; }
+  }
+  @media (max-width:560px){
+    /* Icon over label, so every destination fits across a phone. */
+    .ab-nav { gap:5px; }
+    .ab-nav .navbtn { flex:1 1 58px; min-width:58px; min-height:50px; flex-direction:column; gap:3px; padding:5px 2px; border-radius:10px; }
+    .ab-nav .navbtn .navbtn-label { font-size:10px; letter-spacing:.01em; gap:2px; }
+    .ab-nav .la-chev { width:8px; height:8px; }
+    .ab-nav .navbtn .nav-badge { position:absolute; top:2px; right:calc(50% - 24px); min-width:15px; height:15px; padding:0 4px; font-size:9.5px; }
+    .ab-sb2g { min-height:42px; padding:4px 9px 4px 4px; font-size:13px; }
+    .ab-sb2g img { width:32px; height:32px; }
+    .ab-clock { font-size:28px; }
+    .ab-day { font-size:13px; }
+    .ab-date { font-size:10px; }
+  }
+  @media (max-width:380px){
+    .ab-sb2g-label { display:none; }
+    .ab-sb2g { padding:4px; }
+    .ab-clock { font-size:24px; }
+  }
+  /* Scrolled phones drop to one row: a compact clock beside the nav, because the clock is never
+     optional. Scrolling back to the top restores the date, account and SB2G button. Desktop never
+     condenses. */
+  @media (max-width:820px){
+    .appbar.condensed .ab-inner { flex-wrap:nowrap; padding-top:5px; padding-bottom:5px; }
+    .appbar.condensed .ab-sb2g, .appbar.condensed .ab-brand, .appbar.condensed .ab-reserved, .appbar.condensed .ab-account { display:none; }
+    .appbar.condensed .ab-clock { font-size:17px; }
+    .appbar.condensed .ab-clock .sec { display:none; }
+    .appbar.condensed .ab-nav { order:0; flex:1 1 auto; }
+  }
+  /* shared-appbar:end */
+
+  /* Settings & tools footer (2026-09-11), patterned on MM..HOME's. Sync, account, sound, print,
+     import/export and today's progress used to crowd the header; they live at the bottom now. */
+  .tools { margin-top:34px; padding-top:16px; border-top:1px solid var(--line); }
+  .tools-title { margin-bottom:9px; }
+  .tools-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .tools-status { display:flex; align-items:center; justify-content:center; gap:8px 16px; flex-wrap:wrap; margin-top:16px; }
+  .tools-status .auth-who:empty { display:none; }
   .progress-wrap { min-width:180px; }
   .progress-top { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px; gap:12px; }
   .progress-count { font-family:var(--mono); font-size:13px; font-weight:600; }
   .bar { height:8px; background:var(--track); border-radius:99px; overflow:hidden; width:180px; }
   .bar > span { display:block; height:100%; width:0%; background:linear-gradient(90deg,var(--signal),#23B877); border-radius:99px; transition:width .35s ease; }
-  /* Wraps because this row now carries a sign-in control as well as the utility buttons, and on a
-     phone the un-wrapped row ran ~82px past the viewport — dragging the whole page into sideways
-     scroll. .head-right already wraps; this makes its inner row agree. */
-  .util { display:flex; gap:8px; align-items:center; flex-wrap:wrap; row-gap:6px; }
   .sync-badge { font-family:var(--mono); font-size:11px; font-weight:600; margin-right:2px; white-space:nowrap; }
   .family-link-status { font-family:var(--mono); font-size:11px; color:var(--muted-2); white-space:nowrap; }
   .family-link-status:empty { display:none; }
+  @media (max-width:640px){
+    .tools-row .btn { flex:1 1 auto; }
+  }
 
   .btn { font-family:var(--sans); font-size:13px; font-weight:600; border:1px solid var(--line); background:var(--card); color:var(--ink); padding:8px 12px; border-radius:10px; cursor:pointer; box-shadow:var(--shadow); white-space:nowrap; }
   .btn:hover { border-color:var(--muted-2); }
@@ -701,107 +783,92 @@
 </style>
 </head>
 <body>
-<header class="global-appbar">
-  <div class="global-appbar-inner">
-    <nav class="global-nav" aria-label="Apps">
-      <a class="global-navbtn" href="./" aria-current="page">
-        <img class="global-nav-icon-img" src="./favicon-32.png" alt="">
-        <span class="global-nav-label">SB2G</span>
-      </a>
-      <a class="global-navbtn" href="./mm-home/">
-        <img class="global-nav-icon-img" src="./mm-home-icon-64.png" alt="">
-        <span class="global-nav-label">MM..HOME</span>
-      </a>
-    </nav>
+<!-- SHARED APP BAR (2026-09-11) — the same component as MM..HOME's bar: SB2G button, large live
+     clock with the date beside it, room for future icons, then Home / Calendar / Agenda / Time /
+     Life Admin. The destinations other than Time open the embedded MM..HOME at ./mm-home/. -->
+<header class="appbar" id="appBar">
+  <div class="ab-inner" id="appBarInner">
+    <a class="ab-sb2g" id="sb2gLink" href="./" aria-label="SB2G" aria-current="page"><img src="./icon-192.png" alt=""><span class="ab-sb2g-label">SB2G</span></a>
+    <div class="ab-time">
+      <div class="ab-clock" id="clock">--:--<span class="sec">:--</span></div>
+      <div class="ab-brand">
+        <span class="ab-day" id="datestrDay"></span>
+        <span class="ab-date" id="datestr"></span>
+      </div>
+    </div>
+    <div class="ab-reserved" aria-hidden="true"></div>
+    <nav class="ab-nav" id="appNav" aria-label="Main"></nav>
   </div>
 </header>
 <div class="wrap">
-
-  <header class="top">
-    <div class="brand">
-      <h1>ScattaBrain to Genius</h1>
-      <div><div class="eyebrow">Personal command center</div><div class="datestr" id="datestr"></div></div>
-    </div>
-    <div class="head-right">
-      <div class="clock" id="clock">--:--<span class="sec">:--</span></div>
-      <div class="progress-wrap">
-        <div class="progress-top"><span class="eyebrow">Today</span><span class="progress-count" id="progressCount">0 of 0 done</span><span class="overdue-chip" id="overdueChip"></span></div>
-        <div class="bar"><span id="progressBar"></span></div>
-      </div>
-      <div class="util">
-        <span class="sync-badge" id="syncBadge"></span>
-        <span class="family-link-status" id="familyLinkStatus"></span>
-        <span class="auth-who" id="authWho"></span>
-        <button class="btn sm" id="authBtn" hidden></button>
-        <button class="btn sm" id="soundToggle">Sound: On</button>
-        <button class="btn sm" id="printBtn">🖨 Print</button>
-        <button class="btn sm" id="exportBtn">Export</button>
-        <button class="btn sm" id="importBtn">Import</button>
-        <input type="file" id="importFile" accept="application/json" hidden>
-      </div>
-    </div>
-  </header>
 
   <!-- Sign-in state. Only ever shown when there is something the user must act on: signed out
        (cloud sync is off, the app still works locally) or signed in but not authorised by the
        database rules. Silent once sync is healthy. -->
   <div class="auth-notice hidden" id="authNotice"></div>
 
-  <!-- THE OTHER GRIND — Tier 1 (mode, live timer, remaining authorised time, controls) sits above
-       everything else on purpose: it must be the first thing visible on opening The Grind.
-       Only the containers are static; every child is rendered by renderOtherGrind() / ogTickLive(). -->
-  <section class="og" id="og" aria-label="The Other Grind">
-    <div class="og-head">
-      <div class="og-lead">
-        <div class="og-eyebrow">The Other Grind</div>
-        <div class="og-mode" id="ogMode"></div>
-        <div class="og-sub" id="ogSub"></div>
+  <!-- TIME — The Grind (renamed from The Other Grind, 2026-09-11). It used to sit above the
+       dashboard; it now opens from the bar's Time button (#time), and that button shows a dot
+       while a session runs (red once its time is reached). Only the containers are static; every
+       child is rendered by renderOtherGrind() / ogTickLive(), which keep running in either view. -->
+  <div class="hidden" id="timeView">
+    <section class="og" id="og" aria-label="The Grind">
+      <div class="og-head">
+        <div class="og-lead">
+          <div class="og-eyebrow">The Grind</div>
+          <div class="og-mode" id="ogMode"></div>
+          <div class="og-sub" id="ogSub"></div>
+        </div>
+        <div class="og-readout">
+          <div class="og-timer" id="ogTimer">00:00:00</div>
+          <div class="og-remaining" id="ogRemaining"></div>
+        </div>
       </div>
-      <div class="og-readout">
-        <div class="og-timer" id="ogTimer">00:00:00</div>
-        <div class="og-remaining" id="ogRemaining"></div>
+      <div class="og-controls" id="ogControls"></div>
+      <div class="og-session-opts" id="ogSessionOpts"></div>
+      <div class="og-decision hidden" id="ogDecision" role="group" aria-label="Time reached"></div>
+
+      <div class="og-scope"><span class="og-scope-title">Today</span><span class="og-scope-note" id="ogTodayRatio"></span></div>
+      <div class="og-stats" id="ogTodayStats"></div>
+      <div class="og-scope"><span class="og-scope-title">This week</span><span class="og-scope-note" id="ogWeekRatio"></span></div>
+      <div class="og-stats" id="ogWeekStats"></div>
+
+      <div class="og-foot">
+        <button class="og-disclose" id="ogPaceToggle" aria-expanded="false" aria-controls="ogPacePanel">At this pace</button>
+        <button class="og-disclose" id="ogHistToggle" aria-expanded="false" aria-controls="ogHistPanel">History</button>
+        <label class="og-waking">Waking day <input type="number" id="ogWaking" min="1" max="24" step="0.5" aria-label="Estimated waking hours per day"> h</label>
       </div>
-    </div>
-    <div class="og-controls" id="ogControls"></div>
-    <div class="og-session-opts" id="ogSessionOpts"></div>
-    <div class="og-decision hidden" id="ogDecision" role="group" aria-label="Time reached"></div>
-
-    <div class="og-scope"><span class="og-scope-title">Today</span><span class="og-scope-note" id="ogTodayRatio"></span></div>
-    <div class="og-stats" id="ogTodayStats"></div>
-    <div class="og-scope"><span class="og-scope-title">This week</span><span class="og-scope-note" id="ogWeekRatio"></span></div>
-    <div class="og-stats" id="ogWeekStats"></div>
-
-    <div class="og-foot">
-      <button class="og-disclose" id="ogPaceToggle" aria-expanded="false" aria-controls="ogPacePanel">At this pace</button>
-      <button class="og-disclose" id="ogHistToggle" aria-expanded="false" aria-controls="ogHistPanel">History</button>
-      <label class="og-waking">Waking day <input type="number" id="ogWaking" min="1" max="24" step="0.5" aria-label="Estimated waking hours per day"> h</label>
-    </div>
-    <div class="og-panel hidden" id="ogPacePanel"></div>
-    <div class="og-panel hidden" id="ogHistPanel"></div>
-  </section>
-
-  <div class="nextup empty" id="nextup"></div>
-
-  <div class="dates-section" id="datesSection">
-    <div class="dates-head">
-      <div class="panel-title" style="margin:0">Important dates</div>
-      <div class="dates-head-actions">
-        <button class="btn sm" id="addDateBtn">+ Add date</button>
-        <button class="btn sm" id="viewAllDatesBtn" aria-expanded="false">View all</button>
-      </div>
-    </div>
-    <div class="dates-quick" id="datesQuick"></div>
-    <div class="dates-all hidden" id="datesAll">
-      <div class="dates-all-head">
-        <div class="panel-title" style="margin:0">All upcoming dates</div>
-        <button class="btn sm" id="closeAllDatesBtn">Close</button>
-      </div>
-      <div class="dates-all-list" id="datesAllList"></div>
-      <button class="dates-past-toggle" id="pastDatesToggle" aria-expanded="false">Show past dates</button>
-      <div class="dates-past-list hidden" id="pastDatesList"></div>
-    </div>
+      <div class="og-panel hidden" id="ogPacePanel"></div>
+      <div class="og-panel hidden" id="ogHistPanel"></div>
+    </section>
   </div>
 
+  <div id="dashView">
+  <!-- Up Next and Important Dates are retired from the visible dashboard (2026-09-11). Hidden, not
+       deleted: render() and tick() still fill them, and the dates still sync, print and export. -->
+  <div class="hidden" aria-hidden="true">
+    <div class="nextup empty" id="nextup"></div>
+
+    <div class="dates-section" id="datesSection">
+      <div class="dates-head">
+        <div class="panel-title" style="margin:0">Important dates</div>
+        <div class="dates-head-actions">
+          <button class="btn sm" id="addDateBtn">+ Add date</button>
+          <button class="btn sm" id="viewAllDatesBtn" aria-expanded="false">View all</button>
+        </div>
+      </div>
+      <div class="dates-quick" id="datesQuick"></div>
+      <div class="dates-all hidden" id="datesAll">
+        <div class="dates-all-head">
+          <div class="panel-title" style="margin:0">All upcoming dates</div>
+          <button class="btn sm" id="closeAllDatesBtn">Close</button>
+        </div>
+        <div class="dates-all-list" id="datesAllList"></div>
+        <button class="dates-past-toggle" id="pastDatesToggle" aria-expanded="false">Show past dates</button>
+        <div class="dates-past-list hidden" id="pastDatesList"></div>
+      </div>
+    </div>
+  </div>
   <div class="peoplebar" id="peoplebar"></div>
   <div class="focus-summary" id="focusSummary"></div>
   <div class="preset-bar" id="presetBar"></div>
@@ -910,6 +977,29 @@
     </div>
   </div>
 
+  </div><!-- /dashView -->
+
+  <section class="tools" aria-labelledby="toolsTitle">
+    <div class="eyebrow tools-title" id="toolsTitle">Settings &amp; tools</div>
+    <div class="tools-row">
+      <button class="btn sm" id="soundToggle">Sound: On</button>
+      <button class="btn sm" id="printBtn">🖨 Print</button>
+      <button class="btn sm" id="exportBtn">Export</button>
+      <button class="btn sm" id="importBtn">Import</button>
+      <input type="file" id="importFile" accept="application/json" hidden>
+      <button class="btn sm" id="authBtn" hidden></button>
+    </div>
+    <div class="tools-status">
+      <span class="sync-badge" id="syncBadge"></span>
+      <span class="auth-who" id="authWho"></span>
+      <span class="family-link-status" id="familyLinkStatus"></span>
+      <div class="progress-wrap">
+        <div class="progress-top"><span class="eyebrow">Today</span><span class="progress-count" id="progressCount">0 of 0 done</span><span class="overdue-chip" id="overdueChip"></span></div>
+        <div class="bar"><span id="progressBar"></span></div>
+      </div>
+    </div>
+  </section>
+
   <p class="hint" id="hint"></p>
 </div>
 
@@ -987,7 +1077,161 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script>
 "use strict";
-const VERSION = "1.1-beta";
+const VERSION = "1.2-beta";
+
+/* shared-appnav-js:start
+   SHARED APP NAV (2026-09-11) — identical in ScattaBrain to Genius/index.html and MM..HOME/index.html;
+   scripts/update-mm-home.py refuses to embed MM..HOME while the two copies differ. Each app passes
+   its own destinations. The markup, icon mapping, Life Admin flyout, live clock/date and the phone
+   condense behaviour are common, so the two pages cannot drift apart. */
+const NAV_ICON_FILES={home:"home.png",calendar:"calendar.png",agenda:"agenda.png",time:"time.png",lifeAdmin:"life-admin.png",
+  ehah:"ehah.png",clothing:"clothing.png",chores:"chores.png",bank:"money.png"};
+const LIFE_ADMIN_PARTS="#lifeAdminTrigger, #lifeAdminPanel";
+const lifeAdminMenu={open:false, viaHover:false, hoverTimer:0};
+
+/* items: [{id,label,icon,href,current,badge,dot}] — labels arrive already escaped. group: {label,items}. */
+function appNavHtml(iconBase, items, group){
+  const ico=key=>`<img class="nav-ico" src="${iconBase}${NAV_ICON_FILES[key]}" alt="" width="22" height="22" decoding="async">`;
+  const badge=n=>n?`<span class="nav-badge" title="${n} waiting for a parent">${n>99?"99+":n}</span>`:"";
+  const link=(it,cls)=>`<a class="${cls}" href="${it.href}" data-page="${it.id}"${it.current?' aria-current="page"':""}>`+
+    `${ico(it.icon)}<span class="navbtn-label">${it.label}</span>${badge(it.badge)}`+
+    `${it.dot?`<span class="nav-dot ${it.dot.cls}" title="${it.dot.title}"></span>`:""}</a>`;
+  const groupCurrent=group.items.some(it=>it.current), groupBadge=group.items.reduce((s,it)=>s+(it.badge||0),0);
+  return items.map(it=>link(it,"navbtn")).join("")+
+    `<button type="button" class="navbtn la-trigger${groupCurrent?" is-current":""}" id="lifeAdminTrigger" aria-expanded="${lifeAdminMenu.open}" aria-controls="lifeAdminPanel">`+
+      `${ico("lifeAdmin")}<span class="navbtn-label">${group.label}<svg class="la-chev" viewBox="0 0 10 10" aria-hidden="true" focusable="false"><path d="M2 3.5 5 6.5 8 3.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>${badge(groupBadge)}</button>`+
+    `<div class="la-panel" id="lifeAdminPanel"${lifeAdminMenu.open?"":" hidden"}>${group.items.map(it=>link(it,"la-link")).join("")}</div>`;
+}
+/* A rebuild must not strand keyboard focus, so whichever nav item had focus gets it back. */
+function paintAppNav(nav, html){
+  const active=nav.contains(document.activeElement)?document.activeElement:null;
+  const key=active?(active.id||active.getAttribute("data-page")||""):"";
+  nav.innerHTML=html;
+  if(key){ const el=document.getElementById(key)||nav.querySelector(`[data-page="${key}"]`); if(el) el.focus(); }
+  placeLifeAdminPanel();
+}
+function placeLifeAdminPanel(){
+  const bar=document.getElementById("appBar"), trigger=document.getElementById("lifeAdminTrigger"), panel=document.getElementById("lifeAdminPanel");
+  if(!bar||!trigger||!panel||panel.hidden) return;
+  const b=bar.getBoundingClientRect(), t=trigger.getBoundingClientRect(), w=panel.offsetWidth;
+  panel.style.left=Math.max(8, Math.min(t.right-b.left-w, b.width-w-8))+"px";
+  panel.style.top=(t.bottom-b.top+6)+"px";
+  panel.style.maxHeight=Math.max(140, window.innerHeight-t.bottom-14)+"px";
+}
+function setLifeAdminOpen(open, opts){
+  const o=opts||{}, trigger=document.getElementById("lifeAdminTrigger"), panel=document.getElementById("lifeAdminPanel");
+  clearTimeout(lifeAdminMenu.hoverTimer);
+  lifeAdminMenu.open=!!open; lifeAdminMenu.viaHover=!!(open&&o.hover);
+  if(!trigger||!panel) return;
+  trigger.setAttribute("aria-expanded", String(lifeAdminMenu.open));
+  panel.hidden=!lifeAdminMenu.open;
+  if(lifeAdminMenu.open){
+    placeLifeAdminPanel();
+    const links=panel.querySelectorAll(".la-link");
+    if(o.focus==="first"&&links.length) links[0].focus();
+    if(o.focus==="last"&&links.length) links[links.length-1].focus();
+  } else if(o.returnFocus) trigger.focus();
+}
+/* Click, tap, Enter and Space toggle. Hover opens only for a precise mouse and is never required;
+   clicking a hover-opened panel pins it. Escape, an outside click or tabbing away closes. */
+function initLifeAdminMenu(nav){
+  if(!nav) return;
+  const inMenu=el=>!!(el&&el.closest&&el.closest(LIFE_ADMIN_PARTS));
+  nav.addEventListener("click",e=>{
+    if(e.target.closest("#lifeAdminTrigger")){ setLifeAdminOpen(!lifeAdminMenu.open||lifeAdminMenu.viaHover); return; }
+    if(e.target.closest(".la-link")) setLifeAdminOpen(false);
+  });
+  nav.addEventListener("keydown",e=>{
+    const onTrigger=e.target.closest("#lifeAdminTrigger"), inPanel=e.target.closest("#lifeAdminPanel");
+    if(!onTrigger&&!inPanel) return;
+    if(e.key==="Escape"&&lifeAdminMenu.open){ e.preventDefault(); e.stopPropagation(); setLifeAdminOpen(false,{returnFocus:true}); return; }
+    if(onTrigger&&(e.key==="ArrowDown"||e.key==="ArrowUp")){ e.preventDefault(); setLifeAdminOpen(true,{focus:e.key==="ArrowDown"?"first":"last"}); return; }
+    if(inPanel&&["ArrowDown","ArrowUp","Home","End"].includes(e.key)){
+      e.preventDefault();
+      const links=[...nav.querySelectorAll("#lifeAdminPanel .la-link")], i=links.indexOf(e.target.closest(".la-link"));
+      const next=e.key==="Home"?0:e.key==="End"?links.length-1:(i+(e.key==="ArrowDown"?1:-1)+links.length)%links.length;
+      if(links[next]) links[next].focus();
+    }
+  });
+  const finePointer=window.matchMedia?window.matchMedia("(hover:hover) and (pointer:fine)"):null;
+  nav.addEventListener("pointerover",e=>{
+    if(e.pointerType!=="mouse"||!finePointer||!finePointer.matches||!inMenu(e.target)||lifeAdminMenu.open) return;
+    clearTimeout(lifeAdminMenu.hoverTimer);
+    lifeAdminMenu.hoverTimer=setTimeout(()=>setLifeAdminOpen(true,{hover:true}),120);
+  });
+  nav.addEventListener("pointerout",e=>{
+    if(e.pointerType!=="mouse"||inMenu(e.relatedTarget)) return;
+    clearTimeout(lifeAdminMenu.hoverTimer);
+    if(lifeAdminMenu.open&&lifeAdminMenu.viaHover) lifeAdminMenu.hoverTimer=setTimeout(()=>{ if(lifeAdminMenu.viaHover) setLifeAdminOpen(false); },250);
+  });
+  document.addEventListener("pointerdown",e=>{ if(lifeAdminMenu.open&&!inMenu(e.target)) setLifeAdminOpen(false); },true);
+  document.addEventListener("focusin",e=>{ if(lifeAdminMenu.open&&!inMenu(e.target)) setLifeAdminOpen(false); });
+  document.addEventListener("keydown",e=>{ if(e.key==="Escape"&&lifeAdminMenu.open) setLifeAdminOpen(false); });
+  nav.addEventListener("scroll",placeLifeAdminPanel,{passive:true});
+  window.addEventListener("resize",placeLifeAdminPanel);
+}
+
+/* Live clock and date. The date repaints only when the day changes, so a planner left open overnight
+   shows the new day without a reload. */
+let appBarDayKey="";
+function paintAppBarClock(now){
+  const clock=document.getElementById("clock");
+  if(clock) clock.innerHTML=`${pad2(now.getHours())}:${pad2(now.getMinutes())}<span class="sec">:${pad2(now.getSeconds())}</span>`;
+  const key=now.toDateString(); if(key===appBarDayKey) return; appBarDayKey=key;
+  const day=document.getElementById("datestrDay"), date=document.getElementById("datestr");
+  if(day) day.textContent=now.toLocaleDateString(undefined,{weekday:"long"});
+  if(date) date.textContent=now.toLocaleDateString(undefined,{month:"long",day:"numeric",year:"numeric"});
+}
+
+/* Condense the bar once a phone has scrolled. Passive listener + rAF so it never competes with
+   scrolling itself.
+
+   The hysteresis gap is not cosmetic, and it cannot be a guess. The bar is position:sticky, so it
+   sits IN FLOW: condensing it shortens the document by the height it gives up, and the browser's
+   scroll anchoring then moves scrollY by that same amount to keep the visible content still. If the
+   two thresholds are closer together than that shift, every toggle lands past the opposite
+   threshold and the states chase each other at 60fps. That shipped in MM..HOME 1.17-beta, and it
+   looked like the page was seizing: at 84px of bar and a 20/60 gap, it ran
+   100 -> condense -> 16 -> expand -> 100 -> ... forever, trapping the scroll wherever the user stopped.
+
+   So the gap is derived from the real measured height difference, plus slack. Never hard-code it;
+   the bar's height depends on the viewport, the font, and how the nav wraps. */
+let barCondensed=false, barTicking=false, barExpandAt=8, barCondenseAt=9999;
+function measureBarCondenseDelta(){
+  const bar=document.getElementById("appBar"); if(!bar) return;
+  /* Toggling the class forces two layouts, which can itself trigger an anchoring shift, so the
+     scroll position is put back afterwards. Both reads happen in one synchronous block, so no
+     intermediate state is ever painted. */
+  const y=window.scrollY||document.documentElement.scrollTop||0;
+  const had=bar.classList.contains("condensed");
+  bar.classList.remove("condensed");
+  const tall=bar.getBoundingClientRect().height;
+  bar.classList.add("condensed");
+  const short=bar.getBoundingClientRect().height;
+  bar.classList.toggle("condensed", had);
+  if((window.scrollY||0)!==y){ try{ window.scrollTo(0,y); }catch(e){} }
+  /* Desktop never condenses, so the delta is 0 there and the thresholds simply collapse to a
+     small, harmless gap. */
+  barCondenseAt = barExpandAt + Math.max(0, tall-short) + 24;
+}
+function syncAppBarCondensed(){
+  barTicking=false;
+  const y=window.scrollY||document.documentElement.scrollTop||0;
+  const want = barCondensed ? y>barExpandAt : y>barCondenseAt;
+  if(want===barCondensed) return;
+  barCondensed=want;
+  const bar=document.getElementById("appBar"); if(bar) bar.classList.toggle("condensed",want);
+  placeLifeAdminPanel();
+}
+window.addEventListener("scroll",()=>{ if(!barTicking){ barTicking=true; requestAnimationFrame(syncAppBarCondensed); } },{passive:true});
+/* Re-measure when the viewport changes: rotating a phone rewraps the nav, and crossing the 820px
+   breakpoint removes the condensed rules altogether. */
+let barMeasureTimer=null;
+window.addEventListener("resize",()=>{
+  clearTimeout(barMeasureTimer);
+  barMeasureTimer=setTimeout(()=>{ measureBarCondenseDelta(); syncAppBarCondensed(); },150);
+});
+/* shared-appnav-js:end */
 
 /* ---------------- storage ---------------- */
 /* Grind-namespaced keys — deliberately isolated from the old Family Planner fork's `home.*`
@@ -1226,7 +1470,7 @@ function renderAuthUI(){
   if(!authUser){
     notice.innerHTML=`
       <div class="an-title">Sign in to sync across your devices</div>
-      <div class="an-body">The Grind is working normally and saving on this device. Signing in with Google unlocks the shared copy, so the same planner and the same Other Grind sessions follow you between your phone, tablet, and computers.${authErrorCode?` <span style="color:var(--alarm)">Sign-in problem: ${esc(authErrorCode)}</span>`:""}</div>
+      <div class="an-body">The Grind is working normally and saving on this device. Signing in with Google unlocks the shared copy, so the same planner and the same Grind sessions follow you between your phone, tablet, and computers.${authErrorCode?` <span style="color:var(--alarm)">Sign-in problem: ${esc(authErrorCode)}</span>`:""}</div>
       <div class="an-actions"><button class="btn add" id="anSignIn"${authBusy?" disabled":""}>${authBusy?"Signing in…":"Sign in with Google"}</button></div>`;
     const b=document.getElementById("anSignIn"); if(b) b.addEventListener("click", signInWithGoogle);
     return;
@@ -4493,11 +4737,13 @@ document.getElementById("ogWaking").addEventListener("change",e=>{
 });
 
 /* ---------------- tick ---------------- */
-function tick(){ const d=new Date(); document.getElementById("clock").innerHTML=`${pad2(d.getHours())}:${pad2(d.getMinutes())}<span class="sec">:${pad2(d.getSeconds())}</span>`;
-  /* Deliberately ahead of the editingActive() guard: an active Other Grind session has to keep
+function tick(){ paintAppBarClock(new Date());
+  /* Deliberately ahead of the editingActive() guard: an active Grind session has to keep
      counting while a task is being edited. ogTickLive() only writes text into leaf nodes, so it is
-     safe outside the guard in a way a full render() would never be. */
+     safe outside the guard in a way a full render() would never be. The Time button's session dot
+     follows it; renderAppNav() rebuilds only when that dot actually changes. */
   ogTickLive();
+  renderAppNav();
   /* editingActive() covers the full task editor, place editor, date editor, AND any inline text/popover —
      nothing the 1s tick does may ever rebuild DOM out from under an open editor. */
   if(!editingActive()){
@@ -4512,11 +4758,63 @@ function tick(){ const d=new Date(); document.getElementById("clock").innerHTML=
   }
 }
 
+/* ---------------- views + shared app bar ----------------
+   The dashboard and Time (The Grind) share this page, and #time selects Time, so MM..HOME's Time
+   button can open it directly. Taps inside the page use replaceState, the same rule as MM..HOME's
+   router: moving around the bar must not stack up back-button history. */
+const NAV_ICON_BASE="./icons/nav/", MM_HOME_URL="./mm-home/";
+let sbView="home", appNavSignature="";
+function renderAppNav(){
+  const nav=document.getElementById("appNav"); if(!nav) return;
+  const fp=(id,label,icon,hash)=>({id, label, icon, href:MM_HOME_URL+hash});
+  const dot=ogActive ? (ogDecisionDue() ? {cls:"due", title:"The Grind: time reached"} : {cls:"", title:"The Grind is tracking"}) : null;
+  const items=[fp("home","Home","home",""), fp("calendar","Calendar","calendar","#calendar"), fp("agenda","Agenda","agenda","#agenda"),
+               {id:"time", label:"Time", icon:"time", href:"#time", current:sbView==="time", dot}];
+  const group={label:"Life Admin", items:[fp("ehah","EHAH","ehah","#ehah"), fp("clothing","Clothing","clothing","#clothing"),
+               fp("funds","Chores","chores","#funds"), fp("bank","Bank","bank","#bank")]};
+  const sig=JSON.stringify([items,group]);
+  if(sig===appNavSignature) return;
+  appNavSignature=sig;
+  paintAppNav(nav, appNavHtml(NAV_ICON_BASE, items, group));
+}
+function applySbView(){
+  const want=location.hash==="#time" ? "time" : "home", changed=want!==sbView;
+  sbView=want;
+  if(changed){
+    /* Same rule as MM..HOME's showPage(): a view change commits inline edits. A Grind session edit
+       is cancelled when Time is left, exactly as closing History does, because a hidden editor keeps
+       editingActive() true and would silently hold back every dashboard re-render. */
+    closeActiveEdit(true);
+    if(sbView!=="time" && ogEditSessionId!=null){ ogEditSessionId=null; ogEditError=""; ogRenderHistoryPanel(); }
+  }
+  document.getElementById("timeView").classList.toggle("hidden", sbView!=="time");
+  document.getElementById("dashView").classList.toggle("hidden", sbView!=="home");
+  const brand=document.getElementById("sb2gLink");
+  if(sbView==="home") brand.setAttribute("aria-current","page"); else brand.removeAttribute("aria-current");
+  renderAppNav();
+  if(changed){ try{ window.scrollTo(0,0); }catch(e){} syncAppBarCondensed(); }
+}
+function showSbView(view){
+  const hash=view==="time" ? "#time" : "";
+  if(location.hash!==hash) history.replaceState(null,"",hash||location.pathname+location.search);
+  applySbView();
+}
+const plainClick=e=>e.button===0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
+document.getElementById("appNav").addEventListener("click",e=>{
+  if(!e.target.closest('a[data-page="time"]') || !plainClick(e)) return;
+  e.preventDefault(); showSbView("time");
+});
+document.getElementById("sb2gLink").addEventListener("click",e=>{ if(!plainClick(e)) return; e.preventDefault(); showSbView("home"); });
+window.addEventListener("hashchange",applySbView);
+initLifeAdminMenu(document.getElementById("appNav"));
+
 /* ---------------- init ---------------- */
-document.getElementById("datestr").textContent=new Date().toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric"});
+applySbView();
 { const vp=loadJSON(K_PREFS); if(vp){ document.getElementById("showDone").checked=typeof vp.showDone==="boolean"?vp.showDone:(typeof vp.hideDone==="boolean"?!vp.hideDone:false); document.getElementById("showLater").checked=!!vp.showLater; document.getElementById("showSomeday").checked=!!vp.showSomeday; } }
 updateSoundToggleLabel();
 renderAuthUI(); render(); initSync(); tick(); setInterval(tick,1000);  // the family link is attached by attachCloud() once sign-in resolves
+/* After the first render, so the bar is at its real height when its condense delta is read. */
+measureBarCondenseDelta(); syncAppBarCondensed();
 if("serviceWorker" in navigator && (location.protocol==="https:" || location.hostname==="localhost" || location.hostname==="127.0.0.1")){
   window.addEventListener("load",()=>{
     navigator.serviceWorker.register("./service-worker.js").catch(err=>console.warn("ScattaBrain service worker registration failed:",err));
