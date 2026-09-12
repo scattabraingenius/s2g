@@ -1,4 +1,4 @@
-const CACHE_NAME = "scattabrain-unified-shell-v5-946bf8f583af";
+const CACHE_NAME = "scattabrain-unified-shell-v5-09bb2bcb2217";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -12,17 +12,9 @@ const APP_SHELL = [
   "./icon-maskable-512.png",
   "./mm-home-icon-64.png",
   "./mm-home-icon-512.png",
+  "./icons/nav/neon-atlas.png",
   "./icons/nav/family-all.png",
   "./icons/nav/family-portraits.png",
-  "./icons/nav/home.svg",
-  "./icons/nav/calendar.svg",
-  "./icons/nav/agenda.svg",
-  "./icons/nav/time.svg",
-  "./icons/nav/life-admin.svg",
-  "./icons/nav/ehah.svg",
-  "./icons/nav/clothing.svg",
-  "./icons/nav/chores.svg",
-  "./icons/nav/money.svg"
 ];
 
 self.addEventListener("install", event => {

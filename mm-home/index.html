@@ -1178,6 +1178,9 @@
   .ab-nav .navbtn:hover { border-color:var(--ab-pink-soft); }
   .ab-nav .navbtn[aria-current="page"], .ab-nav .navbtn.is-current { background:var(--ab-pink); border-color:var(--ab-pink); color:var(--ab-on-pink); }
   .ab-sb2g:focus-visible, .ab-nav .navbtn:focus-visible, .la-link:focus-visible { outline:2px solid var(--ab-pink-soft); outline-offset:2px; }
+  .nav-icon-frame { position:relative; display:block; width:22px; height:22px; overflow:hidden; flex:none; }
+  .la-link .nav-icon-frame { width:26px; height:26px; }
+  .nav-icon-frame .nav-ico { position:absolute; width:300%; height:300%; max-width:none; left:calc(var(--tile-x) * -100%); top:calc(var(--tile-y) * -100%); }
   .nav-ico { width:22px; height:22px; object-fit:contain; flex:none; display:block; }
   .ab-nav .navbtn-label { display:inline-flex; align-items:center; gap:4px; }
   .la-chev { width:10px; height:10px; flex:none; transition:transform .15s ease; }
@@ -1199,7 +1202,7 @@
   .la-link { position:relative; display:flex; align-items:center; gap:11px; min-height:44px; padding:8px 12px 8px 9px;
              border-radius:10px; color:var(--ab-ink); font-family:var(--sans); font-size:15px; font-weight:700;
              line-height:1.2; text-decoration:none; white-space:nowrap; }
-  .la-link .nav-ico { width:26px; height:26px; }
+  .la-link .nav-ico { width:300%; height:300%; }
   .la-link:hover { background:var(--ab-hover); }
   .la-link[aria-current="page"] { background:var(--ab-pink); color:var(--ab-on-pink); }
   .la-link .nav-badge { margin-left:auto; }
@@ -1307,8 +1310,9 @@
 #hgCountdown {font-size:13px;font-variant-numeric:tabular-nums;}
 .hg-history-table {width:100%;min-width:300px;border-collapse:collapse;font-size:12px;} .hg-history-table th,.hg-history-table td {padding:10px 6px;text-align:left;border-bottom:1px solid var(--line);} .hg-history-table th {font-size:11px;}
   input[type="time"] { color-scheme:dark; background-color:var(--card); color:var(--ink); border:1px solid var(--line); border-radius:8px; padding:6px 8px; min-height:36px; box-sizing:border-box; }
-  input[type="time"]::-webkit-calendar-picker-indicator { background-image:url("../icons/nav/time.svg"); background-size:contain; background-position:center; background-repeat:no-repeat; width:24px; height:24px; opacity:1; cursor:pointer; }
-  .ui-illustration { width:36px; height:36px; object-fit:contain; border-radius:8px; vertical-align:middle; }
+  input[type="time"]::-webkit-calendar-picker-indicator { background-image:url("../icons/nav/neon-atlas.png"); background-size:300% 300%; background-position:0% 50%; background-repeat:no-repeat; width:24px; height:24px; opacity:1; cursor:pointer; }
+  .ui-illustration { display:inline-block; position:relative; overflow:hidden; width:36px; height:36px; border-radius:8px; vertical-align:middle; }
+  .ui-illustration img { position:absolute; width:300%; height:300%; max-width:none; left:calc(var(--tile-x) * -100%); top:calc(var(--tile-y) * -100%); }
   .home-shortcuts .ui-illustration { width:44px; height:44px; }
 </style>
 </head>
@@ -1361,8 +1365,8 @@
     <div class="family-choices" id="whoPick"></div>
   </section>
   <nav class="home-shortcuts" id="homeShortcuts" aria-label="Home shortcuts">
-    <button onclick="showPage('ehah')"><span><img class="ui-illustration" src="../icons/nav/ehah.svg" alt=""></span><b>EHAH</b><small>Everything Has a Home</small></button>
-    <button onclick="showPage('funds')"><span><img class="ui-illustration" src="../icons/nav/chores.svg" alt=""></span><b>Chores</b><small>Pick a job. Earn money.</small></button>
+    <button onclick="showPage('ehah')"><span><span class="ui-illustration" style="--tile-x:2;--tile-y:1"><img src="../icons/nav/neon-atlas.png" alt=""></span></span><b>EHAH</b><small>Everything Has a Home</small></button>
+    <button onclick="showPage('funds')"><span><span class="ui-illustration" style="--tile-x:1;--tile-y:2"><img src="../icons/nav/neon-atlas.png" alt=""></span></span><b>Chores</b><small>Pick a job. Earn money.</small></button>
   </nav>
   <!-- Family editing stays on Home. -->
   <div class="people-editor hidden" id="peopleEditor"></div>
@@ -1505,7 +1509,7 @@
      ===================================================================== -->
 <div class="funds-wrap hidden" id="fundsPage">
   <header class="pagehead">
-    <h1 class="pagehead-title"><span aria-hidden="true"><img class="ui-illustration" src="../icons/nav/chores.svg" alt=""></span> Chores<span class="pagehead-scope" id="fnScope"></span></h1>
+    <h1 class="pagehead-title"><span aria-hidden="true"><span class="ui-illustration" style="--tile-x:1;--tile-y:2"><img src="../icons/nav/neon-atlas.png" alt=""></span></span> Chores<span class="pagehead-scope" id="fnScope"></span></h1>
     <div class="pagehead-actions">
       <button class="btn sm" id="fnJobsBtn">Edit jobs</button>
     </div>
@@ -1536,7 +1540,7 @@
      ===================================================================== -->
 <div class="funds-wrap hidden" id="bankPage">
   <header class="pagehead">
-    <h1 class="pagehead-title"><span aria-hidden="true"><img class="ui-illustration" src="../icons/nav/money.svg" alt=""></span> Bank<span class="pagehead-scope" id="bkScope"></span></h1>
+    <h1 class="pagehead-title"><span aria-hidden="true"><span class="ui-illustration" style="--tile-x:2;--tile-y:2"><img src="../icons/nav/neon-atlas.png" alt=""></span></span> Bank<span class="pagehead-scope" id="bkScope"></span></h1>
     <div class="pagehead-actions">
       <button class="btn add" id="fnNewEntryBtn">+ Record money</button>
       <button class="btn sm" id="fnSettingsBtn">Account settings</button>
@@ -1616,7 +1620,7 @@
 
 <div class="clothing-wrap hidden" id="clothingPage">
   <header class="pagehead">
-    <h1 class="pagehead-title"><span aria-hidden="true"><img class="ui-illustration" src="../icons/nav/clothing.svg" alt=""></span> Clothing<span class="pagehead-scope" id="clScope"></span></h1>
+    <h1 class="pagehead-title"><span aria-hidden="true"><span class="ui-illustration" style="--tile-x:0;--tile-y:2"><img src="../icons/nav/neon-atlas.png" alt=""></span></span> Clothing<span class="pagehead-scope" id="clScope"></span></h1>
     <div class="pagehead-actions">
       <button class="btn sm" id="clHelpBtn">Kid guides</button>
       <button class="btn sm" id="clCalculatorBtn">Deal calculator</button>
@@ -1741,14 +1745,15 @@ const VERSION = "1.21-beta";
    scripts/update-mm-home.py refuses to embed MM..HOME while the two copies differ. Each app passes
    its own destinations. The markup, icon mapping, Life Admin flyout, live clock/date and the phone
    condense behaviour are common, so the two pages cannot drift apart. */
-const NAV_ICON_FILES={home:"home.svg",calendar:"calendar.svg",agenda:"agenda.svg",time:"time.svg",lifeAdmin:"life-admin.svg",
-  ehah:"ehah.svg",clothing:"clothing.svg",chores:"chores.svg",bank:"money.svg"};
+const NAV_ICON_TILES={home:0,calendar:1,agenda:2,time:3,lifeAdmin:4,
+  ehah:5,clothing:6,chores:7,bank:8};
 const LIFE_ADMIN_PARTS="#lifeAdminTrigger, #lifeAdminPanel";
 const lifeAdminMenu={open:false, viaHover:false, hoverTimer:0};
 
 /* items: [{id,label,icon,href,current,badge,dot}] — labels arrive already escaped. group: {label,items}. */
 function appNavHtml(iconBase, items, group){
-  const ico=key=>`<img class="nav-ico" src="${iconBase}${NAV_ICON_FILES[key]}" alt="" width="22" height="22" decoding="async">`;
+  const ico=key=>{ const tile=NAV_ICON_TILES[key];
+    return `<span class="nav-icon-frame" style="--tile-x:${tile%3};--tile-y:${Math.floor(tile/3)}"><img class="nav-ico" src="${iconBase}neon-atlas.png" alt="" width="66" height="66" decoding="async"></span>`; };
   const badge=n=>n?`<span class="nav-badge" title="${n} waiting for a parent">${n>99?"99+":n}</span>`:"";
   const link=(it,cls)=>`<a class="${cls}" href="${it.href}" data-page="${it.id}"${it.current?' aria-current="page"':""}>`+
     `${ico(it.icon)}<span class="navbtn-label">${it.label}</span>${badge(it.badge)}`+
@@ -3411,7 +3416,7 @@ let custodyPaintOpen=false, custodyPaintPerson="", custodyPaintDragging=false, c
 /* One router for every destination. Each page declares its wrapper, hash and render function, so
    adding a page is a row here rather than four more edits scattered through the file. The app bar
    lives outside all of these wrappers and is never hidden, which is what makes Bank -> Clothing a
-   single tap instead of a trip through Home. `icon` is a key into the shared NAV_ICON_FILES. */
+   single tap instead of a trip through Home. `icon` is a key into the shared NAV_ICON_TILES. */
 const PAGES=[
   {id:"home",     label:"Home",     icon:"home",     wrap:"homeWrap",     hash:"",          render:()=>render()},
   {id:"calendar", label:"Calendar", icon:"calendar", wrap:"calendarPage", hash:"#calendar", render:renderCalendarPage},
