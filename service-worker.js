@@ -1,4 +1,13 @@
 const CACHE_NAME = "scattabrain-unified-shell-v5-09bb2bcb2217";
+// Cache Storage is per-origin, not per service-worker scope: /the-grind/ and /s2g/ share one
+// origin (scattabraingenius.github.io), so an unqualified CACHE_NAME could let one site's
+// activate cleanup delete the other site's live cache once their content hashes diverge.
+// Suffix the cache key by the registering scope's path so each site only ever opens and
+// cleans up its own caches. The suffix is appended (not prepended) so CACHE_KEY still starts
+// with the plain CACHE_NAME string that existing tooling matches against.
+const SCOPE_ID = new URL(self.registration.scope).pathname.replace(/^\/|\/$/g, "").replace(/\//g, "-") || "root";
+const SITE_SUFFIX = ":" + SCOPE_ID;
+const CACHE_KEY = CACHE_NAME + SITE_SUFFIX;
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -18,14 +27,14 @@ const APP_SHELL = [
 ];
 
 self.addEventListener("install", event => {
-  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL.map(url=>new Request(url,{cache:"reload"})))));
+  event.waitUntil(caches.open(CACHE_KEY).then(cache => cache.addAll(APP_SHELL.map(url=>new Request(url,{cache:"reload"})))));
   self.skipWaiting();
 });
 
 self.addEventListener("activate", event => {
   event.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(key => key.startsWith("scattabrain-unified-shell-") && key !== CACHE_NAME).map(key => caches.delete(key))))
+      .then(keys => Promise.all(keys.filter(key => key.startsWith("scattabrain-unified-shell-") && key.endsWith(SITE_SUFFIX) && key !== CACHE_KEY).map(key => caches.delete(key))))
       .then(() => self.clients.claim())
   );
 });
@@ -42,7 +51,7 @@ self.addEventListener("fetch", event => {
       fetch(new Request(request,{cache:"no-cache"})).then(response => {
         if(response && response.ok){
           const copy = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(request, copy));
+          caches.open(CACHE_KEY).then(cache => cache.put(request, copy));
         }
         return response;
       }).catch(() =>
@@ -59,7 +68,7 @@ self.addEventListener("fetch", event => {
         const refreshed = fetch(request).then(response => {
           if(response && response.ok){
             const copy = response.clone();
-            caches.open(CACHE_NAME).then(cache => cache.put(request, copy));
+            caches.open(CACHE_KEY).then(cache => cache.put(request, copy));
           }
           return response;
         }).catch(() => cached);
