@@ -1134,6 +1134,11 @@
     .fn-page-title { font-size:24px; }
   }
 
+  .family-portrait { position:relative; overflow:hidden; flex:none; }
+  .family-portrait img { position:absolute; width:512%; max-width:none; height:auto; }
+  .family-all img { width:100%; height:100%; object-fit:cover; object-position:center 52%; }
+  .hg-avatar.avatar-small { width:22px; height:22px; font-size:11px; display:inline-grid; vertical-align:middle; flex:none; }
+
   /* shared-appbar:start
      SHARED APP BAR (2026-09-11) — one component for ScattaBrain to Genius and MM..HOME.
      Keep this block identical in both index.html files: scripts/update-mm-home.py refuses to
@@ -1215,7 +1220,7 @@
   @media (max-width:560px){
     /* Icon over label, so every destination fits across a phone. */
     .ab-nav { gap:5px; }
-    .ab-nav .navbtn { flex:1 1 58px; min-width:58px; min-height:50px; flex-direction:column; gap:3px; padding:5px 2px; border-radius:10px; }
+    .ab-nav .navbtn { flex:1 1 0; min-width:0; min-height:50px; flex-direction:column; gap:3px; padding:5px 2px; border-radius:10px; }
     .ab-nav .navbtn .navbtn-label { font-size:10px; letter-spacing:.01em; gap:2px; }
     .ab-nav .la-chev { width:8px; height:8px; }
     .ab-nav .navbtn .nav-badge { position:absolute; top:2px; right:calc(50% - 24px); min-width:15px; height:15px; padding:0 4px; font-size:9.5px; }
@@ -1301,6 +1306,10 @@
 .hg-other-description textarea {display:block;box-sizing:border-box;width:100%;min-height:64px;margin-top:5px;background:var(--input-bg);color:var(--ink);border:1px solid var(--line);font:inherit;padding:8px;}
 #hgCountdown {font-size:13px;font-variant-numeric:tabular-nums;}
 .hg-history-table {width:100%;min-width:300px;border-collapse:collapse;font-size:12px;} .hg-history-table th,.hg-history-table td {padding:10px 6px;text-align:left;border-bottom:1px solid var(--line);} .hg-history-table th {font-size:11px;}
+  input[type="time"] { color-scheme:dark; background-color:var(--card); color:var(--ink); border:1px solid var(--line); border-radius:8px; padding:6px 8px; min-height:36px; box-sizing:border-box; }
+  input[type="time"]::-webkit-calendar-picker-indicator { background-image:url("../icons/nav/time.svg"); background-size:contain; background-position:center; background-repeat:no-repeat; width:24px; height:24px; opacity:1; cursor:pointer; }
+  .ui-illustration { width:36px; height:36px; object-fit:contain; border-radius:8px; vertical-align:middle; }
+  .home-shortcuts .ui-illustration { width:44px; height:44px; }
 </style>
 </head>
 <body>
@@ -1338,17 +1347,11 @@
     <div class="ab-reserved" aria-hidden="true"></div>
 
     <nav class="ab-nav" id="appNav" aria-label="Main"></nav>
-    <div class="ab-account">
-      <span class="sync-badge" id="syncBadge"></span>
-      <span class="auth-who" id="authWho"></span>
-      <button class="btn sm" id="authBtn" hidden></button>
-    </div>
+
   </div>
 </header>
 
-<!-- Sign-in state. Outside the page wrappers with the bar, so a signed-out
-     warning is visible from whichever page you happen to be on. -->
-<div class="auth-notice hidden" id="authNotice"></div>
+
 
 <div class="wrap" id="homeWrap">
 
@@ -1358,8 +1361,8 @@
     <div class="family-choices" id="whoPick"></div>
   </section>
   <nav class="home-shortcuts" id="homeShortcuts" aria-label="Home shortcuts">
-    <button onclick="showPage('ehah')"><span>🏠</span><b>EHAH</b><small>Everything Has a Home</small></button>
-    <button onclick="showPage('funds')"><span>🧹</span><b>Chores</b><small>Pick a job. Earn money.</small></button>
+    <button onclick="showPage('ehah')"><span><img class="ui-illustration" src="../icons/nav/ehah.svg" alt=""></span><b>EHAH</b><small>Everything Has a Home</small></button>
+    <button onclick="showPage('funds')"><span><img class="ui-illustration" src="../icons/nav/chores.svg" alt=""></span><b>Chores</b><small>Pick a job. Earn money.</small></button>
   </nav>
   <!-- Family editing stays on Home. -->
   <div class="people-editor hidden" id="peopleEditor"></div>
@@ -1502,7 +1505,7 @@
      ===================================================================== -->
 <div class="funds-wrap hidden" id="fundsPage">
   <header class="pagehead">
-    <h1 class="pagehead-title"><span aria-hidden="true">🧹</span> Chores<span class="pagehead-scope" id="fnScope"></span></h1>
+    <h1 class="pagehead-title"><span aria-hidden="true"><img class="ui-illustration" src="../icons/nav/chores.svg" alt=""></span> Chores<span class="pagehead-scope" id="fnScope"></span></h1>
     <div class="pagehead-actions">
       <button class="btn sm" id="fnJobsBtn">Edit jobs</button>
     </div>
@@ -1533,7 +1536,7 @@
      ===================================================================== -->
 <div class="funds-wrap hidden" id="bankPage">
   <header class="pagehead">
-    <h1 class="pagehead-title"><span aria-hidden="true">🏦</span> Bank<span class="pagehead-scope" id="bkScope"></span></h1>
+    <h1 class="pagehead-title"><span aria-hidden="true"><img class="ui-illustration" src="../icons/nav/money.svg" alt=""></span> Bank<span class="pagehead-scope" id="bkScope"></span></h1>
     <div class="pagehead-actions">
       <button class="btn add" id="fnNewEntryBtn">+ Record money</button>
       <button class="btn sm" id="fnSettingsBtn">Account settings</button>
@@ -1613,7 +1616,7 @@
 
 <div class="clothing-wrap hidden" id="clothingPage">
   <header class="pagehead">
-    <h1 class="pagehead-title"><span aria-hidden="true">👕</span> Clothing<span class="pagehead-scope" id="clScope"></span></h1>
+    <h1 class="pagehead-title"><span aria-hidden="true"><img class="ui-illustration" src="../icons/nav/clothing.svg" alt=""></span> Clothing<span class="pagehead-scope" id="clScope"></span></h1>
     <div class="pagehead-actions">
       <button class="btn sm" id="clHelpBtn">Kid guides</button>
       <button class="btn sm" id="clCalculatorBtn">Deal calculator</button>
@@ -1656,6 +1659,15 @@
     </div>
   </section>
 </div>
+
+<footer class="wrap account-tools" aria-label="Account and sync">
+  <div class="tools-row">
+    <span class="sync-badge" id="syncBadge"></span>
+    <span class="auth-who" id="authWho"></span>
+    <button class="btn sm" id="authBtn" hidden></button>
+  </div>
+  <div class="auth-notice hidden" id="authNotice"></div>
+</footer>
 
 <div class="cal-modal-backdrop hidden" id="calModalBackdrop">
   <div class="cal-modal" id="calModal" role="dialog" aria-modal="true" tabindex="-1"></div>
@@ -1729,8 +1741,8 @@ const VERSION = "1.21-beta";
    scripts/update-mm-home.py refuses to embed MM..HOME while the two copies differ. Each app passes
    its own destinations. The markup, icon mapping, Life Admin flyout, live clock/date and the phone
    condense behaviour are common, so the two pages cannot drift apart. */
-const NAV_ICON_FILES={home:"home.png",calendar:"calendar.png",agenda:"agenda.png",time:"time.png",lifeAdmin:"life-admin.png",
-  ehah:"ehah.png",clothing:"clothing.png",chores:"chores.png",bank:"money.png"};
+const NAV_ICON_FILES={home:"home.svg",calendar:"calendar.svg",agenda:"agenda.svg",time:"time.svg",lifeAdmin:"life-admin.svg",
+  ehah:"ehah.svg",clothing:"clothing.svg",chores:"chores.svg",bank:"money.svg"};
 const LIFE_ADMIN_PARTS="#lifeAdminTrigger, #lifeAdminPanel";
 const lifeAdminMenu={open:false, viaHover:false, hoverTimer:0};
 
@@ -2205,7 +2217,7 @@ function renderAuthUI(){
   if(!btn||!who||!notice) return;
   if(!syncConfigured()){ btn.hidden=true; who.textContent=""; notice.classList.add("hidden"); notice.innerHTML=""; return; }
 
-  btn.hidden=false;
+  btn.hidden=!authUser;
   btn.disabled=authBusy;
   btn.textContent = authBusy ? "Signing in…" : (authUser ? "Sign out" : "Sign in");
   btn.onclick = authUser ? signOutOfPlanner : signInWithGoogle;
@@ -3448,7 +3460,7 @@ function renderAppNav(){
   const item=id=>{ const p=pageDef(id); return {id:p.id, label:esc(p.label), icon:p.icon, href:p.hash||"./", current:currentPage===p.id, badge:p.badge?p.badge():0}; };
   const items=["home","calendar","agenda"].map(item);
   if(SB2G_URL) items.push({id:"time", label:"Time", icon:"time", href:SB2G_URL+"#time"});
-  const group={label:"Life Admin", items:LIFE_ADMIN_PAGES.map(item)};
+  const group={label:"Life", items:LIFE_ADMIN_PAGES.map(item)};
   const sig=JSON.stringify([items,group]);
   if(sig===appNavSignature) return;
   appNavSignature=sig;
@@ -3745,7 +3757,7 @@ function peopleChipsHtml(ids){
   ids = normPeople(ids);
   if(!ids.length) return `<span class="pchip none"><span class="dot"></span>—</span>`;
   if(ids.includes("family")){ const f=getPerson("family"); return `<span class="pchip" style="background:${f.color}"><span class="dot"></span>Family</span>`; }
-  return ids.map(id=>{ const p=getPerson(id); return `<span class="pchip" style="background:${p.color}"><span class="dot"></span>${esc(p.name)}</span>`; }).join("");
+  return ids.map(id=>{ const p=getPerson(id); return `<span class="pchip" style="background:${p.color}">${hgAvatar(p,"avatar-small")}${esc(p.name)}</span>`; }).join("");
 }
 /* incomplete active tasks assigned to this person (family tasks count for everyone) */
 function personCount(pid){ return tasks.filter(t=>isActive(t) && (isFamilyTask(t)||taskPeopleIds(t).includes(pid))).length; }
@@ -3755,7 +3767,7 @@ function personCount(pid){ return tasks.filter(t=>isActive(t) && (isFamilyTask(t
 function makeWhoPicker(container, initial, onChange){
   let sel = normPeople(initial);
   function paint(){
-    const opt=(id,name,color,on)=>`<button type="button" class="who-opt ${on?'on':''}" data-id="${id}"><span class="dot" style="background:${color}"></span>${esc(name)}</button>`;
+    const opt=(id,name,color,on)=>`<button type="button" class="who-opt ${on?'on':''}" data-id="${id}">${hgAvatar({id,name,color},"avatar-small")}${esc(name)}</button>`;
     container.innerHTML = opt("family","Family",getPerson("family").color,sel.includes("family")) +
       people.map(p=>opt(p.id,p.name,p.color,sel.includes(p.id))).join("");
     container.querySelectorAll(".who-opt").forEach(b=>b.addEventListener("click",()=>{
@@ -3907,7 +3919,7 @@ function renderPeopleBar(){
   document.getElementById("familyChange").hidden=familyChoosing;
   document.getElementById("familyHomeTitle").textContent=familyChoosing?"Who is here?":activePerson==="all"?"Everyone's Home":getPerson(activePerson).name+"'s Home";
   pick.innerHTML=[{id:"all",name:"All",color:"var(--signal)"},...people].map(p=>
-    `<button class="family-choice" data-person="${esc(p.id)}" style="--who:${esc(p.color)}" aria-pressed="${activePerson===p.id}"><span class="hg-avatar">${p.id==="all"?"✦":esc(p.name.slice(0,1))}</span><b>${esc(p.name)}</b></button>`).join("");
+    `<button class="family-choice" data-person="${esc(p.id)}" style="--who:${esc(p.color)}" aria-pressed="${activePerson===p.id}">${hgAvatar(p)}<b>${esc(p.name)}</b></button>`).join("");
   pick.querySelectorAll("button").forEach(b=>b.onclick=()=>chooseFamilyPerson(b.dataset.person));
   document.getElementById("whoHi").innerHTML=whoHighlightHtml();
 }
@@ -5955,7 +5967,7 @@ function renderFundsAccounts(){
       : `<div class="fn-goal"><div class="fn-goal-top"><b>No savings goal yet</b></div><div class="fn-goal-note">Set one in Account settings — a target makes the balance mean something.</div></div>`;
     const allowance=cfg.weeklyAllowanceCents>0?`${money(cfg.weeklyAllowanceCents)} every ${WEEKDAY_NAMES[cfg.allowanceDay]}`:"No allowance set";
     return `<article class="bk-card" style="--who:${p.color}" aria-label="${esc(p.name)}'s account">
-      <div class="bk-card-top"><span class="bk-name"><span class="dot" aria-hidden="true"></span>${esc(p.name)}</span><span class="bk-brand">Family Bank</span></div>
+      <div class="bk-card-top"><span class="bk-name">${hgAvatar(p)}${esc(p.name)}</span><span class="bk-brand">Family Bank</span></div>
       <div class="bk-label">Available balance</div>
       <div class="fn-balance ${bal<0?"neg":""}">${money(bal)}</div>
       <div class="fn-sub">${esc(allowance)} · ${week>0?`+${money(week)} earned this week`:"nothing earned this week"}</div>
@@ -6082,8 +6094,12 @@ function hgIcon(name){
   return `<svg class="hg-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${paths.map(d=>`<path d="${d}"/>`).join("")}</svg>`;
 }
 function hgAvatar(person, extra){
-  const initial=String(person.name||"?").trim().slice(0,1).toUpperCase()||"?";
-  return `<span class="hg-avatar ${extra||""}" aria-hidden="true" style="background:${esc(person.color||"#8595A8")}">${esc(initial)}</span>`;
+  const name=String(person.name||"?").trim();
+  const initial=name.slice(0,1).toUpperCase()||"?";
+  if(person.id==="all"||person.id==="family") return `<span class="hg-avatar family-portrait family-all ${extra||""}" aria-hidden="true"><img src="${NAV_ICON_BASE}family-all.png" alt=""></span>`;
+  const portrait={dad:240,daddy:240,jason:240,scatta:240,bella:540,abby:840,ariel:1140}[name.toLowerCase()];
+  if(portrait!==undefined) return `<span class="hg-avatar family-portrait ${extra||""}" aria-hidden="true" style="background-color:${esc(person.color||"#8595A8")}"><img src="${NAV_ICON_BASE}family-portraits.png" alt="" style="left:-${portrait/3}%;top:-6.6667%" onerror="this.parentNode.textContent='${esc(initial)}'"></span>`;
+  return `<span class="hg-avatar ${extra||""}" aria-hidden="true" style="background:${esc(person.color||"#8595A8")}">${person.id==="all"?"✦":esc(initial)}</span>`;
 }
 function hgReduceMotion(){
   try{ return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches); }catch(e){ return false; }

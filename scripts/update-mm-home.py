@@ -27,10 +27,12 @@ replacements={
 for a,b in replacements.items():
     assert source.count(a)==1,a
     source=source.replace(a,b)
+source=source.replace('src="./icons/nav/', 'src="../icons/nav/').replace('url("./icons/nav/', 'url("../icons/nav/')
 (root/'mm-home/index.html').write_text(source,encoding='utf-8',newline='\r\n')
 icons=root/'icons/nav'
 icons.mkdir(parents=True,exist_ok=True)
-for icon in sorted((fp_root/'icons/nav').glob('*.png')):
+for icon in sorted((fp_root/'icons/nav').iterdir()):
+    if icon.suffix.lower() not in ('.png', '.svg'): continue
     shutil.copyfile(icon,icons/icon.name)
 p=root/'service-worker.js'
 s=p.read_text(encoding='utf-8')
