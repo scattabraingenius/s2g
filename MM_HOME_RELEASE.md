@@ -15,6 +15,34 @@ repository, its `s2g` mirror (see below), and the standalone FP source repositor
 three live addresses. Do not replace this page with a redirect that opens outside the installed
 app's scope.
 
+## Bank "Send money" and "Pay back" embed — 2026-09-12 (implemented, NOT yet published)
+
+Source FP change: `Apps\MM..HOME\docs\handoff-to-c.md` ("Bank 'Send money' and 'Pay back'" section).
+`python scripts/update-mm-home.py` run here against the updated source, embedding the new Bank
+transfer feature (Send money, Pay back, `bankParticipants()` household-total fix) into
+`mm-home/index.html` unchanged in structure — only the two files the script always touches changed:
+`mm-home/index.html` (embedded FP source, cache-hash-derived) and `service-worker.js` (its
+`CACHE_NAME` hash bump). Shared app-bar block assertion passed (no divergence between the two
+`index.html` copies), so the embed was not blocked.
+
+**Testing against this checkout:**
+- `tests/unified-pwa.test.cjs` run **unchanged** against a local static-server copy of this
+  worktree — passed (shared app bar, Life Admin, Time, Bank, phone/desktop layout, service worker,
+  Grind engine).
+- The same isolated Bank-transfer suite used for the standalone FP repo
+  (`Resources\FamOS-local-verification-2026-09-11\bank-transfer-check.cjs`, 28 checks) run against
+  `/mm-home/` in this checkout — passed identically to the standalone copy: worked example, gift
+  path, conservation, Dad as sender/recipient without job/allowance/clothing enrollment, the
+  household total fix (Dad included via `bankParticipants()`), linked-history protection, and every
+  other check listed in the FP handoff.
+- No production Firebase data or live household records were read, written, or connected to.
+
+**Not yet done:** not committed or pushed to `the-grind`/`s2g`/`family-planner` — misc review is the
+next gate per `Resources\FamOS-local-verification-2026-09-11\CLAUDE-BANK-TRANSFERS.md`. Once
+authorized to publish, this repository, its `s2g` mirror, and the standalone `family-planner` repo
+all need the paired release, and all three live URLs need re-verification (see the paired-release
+policy in root `AGENTS.md`).
+
 ## s2g URL migration — 2026-09-12 (published)
 
 Jason requested the unified app's URL become `/s2g/` (confirmed spelling). Per the paired-release

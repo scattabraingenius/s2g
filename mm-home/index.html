@@ -718,6 +718,15 @@
   .cl-field input:focus, .cl-field select:focus, .cl-field textarea:focus { outline:2px solid var(--signal); outline-offset:1px; }
   .cl-check { display:flex; align-items:center; gap:7px; font-size:12px; color:var(--muted); }
   .cl-check input { accent-color:var(--signal); }
+  /* Send money's "Does this need to be paid back?" choice. Scoped and overridden with higher
+     specificity than .cl-field label / .cl-field input on purpose: those generic rules (9px mono
+     uppercase label, width:100% input) are meant for a text-field label above a text box, not a
+     tappable Yes/No choice, and were squashing this into an unreadable 4-line uppercase stack at
+     phone width. */
+  .cl-field .sm-repay-option { display:flex; align-items:center; gap:9px; flex:1 1 130px; padding:11px 12px;
+    border:1px solid var(--line); border-radius:10px; cursor:pointer;
+    font-family:inherit; font-size:13.5px; font-weight:600; letter-spacing:normal; text-transform:none; color:var(--ink); }
+  .cl-field .sm-repay-option input[type="radio"] { width:auto; min-width:0; flex:none; margin:0; accent-color:var(--signal); }
   .cl-calc { background:var(--surface-2); border:1px solid var(--line); border-radius:10px; padding:12px; margin-top:14px; }
   .cl-calc-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:8px; }
   .cl-calc-item { min-width:0; }
@@ -1542,6 +1551,7 @@
   <header class="pagehead">
     <h1 class="pagehead-title"><span aria-hidden="true"><span class="ui-illustration" style="--tile-x:2;--tile-y:2"><img src="../icons/nav/neon-atlas.png" alt=""></span></span> Bank<span class="pagehead-scope" id="bkScope"></span></h1>
     <div class="pagehead-actions">
+      <button class="btn add" id="fnSendMoneyBtn">Send money</button>
       <button class="btn add" id="fnNewEntryBtn">+ Record money</button>
       <button class="btn sm" id="fnSettingsBtn">Account settings</button>
     </div>
@@ -1561,6 +1571,7 @@
         <option value="out">Money out</option>
         <option value="pending">Waiting for approval</option>
         <option value="clothing">Clothing transfers</option>
+        <option value="transfer">Family transfers</option>
       </select>
     </div>
     <div class="fn-table-wrap"><table class="fn-table"><thead><tr><th>Date</th><th>Who</th><th>What</th><th>Kind</th><th>Amount</th><th>Balance after</th><th></th></tr></thead><tbody id="fnLedgerBody"></tbody></table></div>
@@ -2663,11 +2674,20 @@ const FUND_KINDS={
   "clothing-wallet":  {label:"To clothing wallet",dir:"out"},
   "clothing-bill":    {label:"Clothing bill paid",dir:"out"},
   adjustment:         {label:"Correction",        dir:"any"},
+  "transfer-out":     {label:"Sent to family",    dir:"out"},
+  "transfer-in":      {label:"Received from family",dir:"in"},
+  "repay-out":        {label:"Paid back",         dir:"out"},
+  "repay-in":         {label:"Repayment received",dir:"in"},
 };
 const FUND_KIND_CLOTHING=new Set(["clothing-refund","clothing-wallet","clothing-bill"]);
 /* Kinds that exist only as one half of a linked clothing transaction. They are created and removed
    through the transfer helpers below, never through the plain "Record money" editor, because a
    lone half would silently disagree with the Clothing page. */
+const FUND_KIND_TRANSFER=new Set(["transfer-out","transfer-in","repay-out","repay-in"]);
+/* Kinds that exist only as one half of a linked Bank transfer (gift/loan) or repayment. Same rule as
+   the clothing kinds above: created only by the Send money / Pay back helpers, excluded from the
+   plain "Record money" editor and from household earned/spent totals, since money moving between two
+   family accounts was neither earned nor spent by the household. */
 function fundKindLabel(k){ return (FUND_KINDS[k]||{}).label || k; }
 
 const DEFAULT_FUND_JOBS=[
@@ -2729,7 +2749,7 @@ function fundsPersonSettings(personId){
 }
 function ensureFundsPersonSettings(){ let changed=false; people.forEach(p=>{ if(!fundsSettings.people[p.id]){ fundsSettings.people[p.id]=blankFundsPerson(p.id); changed=true; } }); return changed; }
 
-function blankFundEntry(){ const now=Date.now(); return {id:uid("fn"),personId:"",date:todayStr(),kind:"job",amount:0,note:"",jobId:"",linkId:"",periodKey:"",status:"approved",created:now,updated:now}; }
+function blankFundEntry(){ const now=Date.now(); return {id:uid("fn"),personId:"",date:todayStr(),kind:"job",amount:0,note:"",jobId:"",linkId:"",periodKey:"",status:"approved",created:now,updated:now,counterpartyId:"",transferType:""}; }
 function migrateFundEntry(raw){
   const src=(raw&&typeof raw==="object"&&!Array.isArray(raw))?raw:{};
   const e=Object.assign(blankFundEntry(),src);
@@ -2739,6 +2759,11 @@ function migrateFundEntry(raw){
   e.amount=finiteInt(e.amount,0);
   e.note=String(e.note||"").slice(0,140);
   e.jobId=String(e.jobId||""); e.linkId=String(e.linkId||""); e.periodKey=String(e.periodKey||"");
+  /* Bank transfer / repayment fields. counterpartyId is only meaningful alongside a transfer kind;
+     an untrusted or legacy import gets it blanked out rather than trusted, since debt is derived by
+     summing these fields (see transferDebt below) and a forged counterparty would misattribute debt. */
+  e.counterpartyId = FUND_KIND_TRANSFER.has(e.kind) ? String(e.counterpartyId||"") : "";
+  e.transferType = (e.kind==="transfer-out"||e.kind==="transfer-in") && (e.transferType==="gift"||e.transferType==="loan") ? e.transferType : "";
   if(!["approved","pending"].includes(e.status)) e.status="approved";
   if(!/^\d{4}-\d{2}-\d{2}$/.test(e.date||"")) e.date=todayStr();
   e.created=Number.isFinite(e.created)?e.created:Date.now();
@@ -2765,6 +2790,16 @@ function addFundEntry(fields){
   fundsLedger.push(e); return e;
 }
 function fundsAccounts(){ return people.filter(p=>isFundsParticipant(p) && fundsPersonSettings(p.id).enabled); }
+/* Who can send/receive a Bank transfer or repayment. Deliberately broader than fundsAccounts(): Dad
+   and other adult household-role names are excluded from allowance/job/clothing-wallet policy by
+   isFundsParticipant, but Jason asked for Dad to hold a tracked balance and give/lend/borrow/repay
+   exactly like the kids. Every real family member can be a transfer counterparty; nothing here
+   enrolls anyone into a job menu, weekly allowance, or clothing wallet. */
+function moneyParticipants(){ return people.slice(); }
+function moneyPersonOptions(selected, allLabel){
+  const head=allLabel?`<option value="all" ${selected==="all"?"selected":""}>${esc(allLabel)}</option>`:"";
+  return head+moneyParticipants().map(p=>`<option value="${p.id}" ${p.id===selected?"selected":""}>${esc(p.name)}</option>`).join("");
+}
 function fundsBalance(personId){ return fundsLedger.filter(e=>e.personId===personId&&e.status==="approved").reduce((s,e)=>s+finiteInt(e.amount,0),0); }
 function fundsPendingTotal(personId){ return fundsLedger.filter(e=>e.personId===personId&&e.status==="pending").reduce((s,e)=>s+Math.abs(finiteInt(e.amount,0)),0); }
 function fundsPendingRequests(){
@@ -2773,7 +2808,9 @@ function fundsPendingRequests(){
     .sort((a,b)=>(a.date||"").localeCompare(b.date||"")||(a.created||0)-(b.created||0));
 }
 function fundsEarnedSince(personId, sinceYmd){
-  return fundsLedger.filter(e=>e.personId===personId&&e.status==="approved"&&e.amount>0&&(e.date||"")>=sinceYmd)
+  /* Bank transfers/repayments are excluded: a gift or loan received was not earned, and counting it
+     here would inflate the "earned this week" line with money that came from inside the app. */
+  return fundsLedger.filter(e=>e.personId===personId&&e.status==="approved"&&e.amount>0&&!FUND_KIND_TRANSFER.has(e.kind)&&(e.date||"")>=sinceYmd)
     .reduce((s,e)=>s+e.amount,0);
 }
 function fundsPersonName(e){ const cur=people.find(p=>p.id===e.personId); return cur?cur.name:"Former family member"; }
@@ -2881,6 +2918,144 @@ function clothingRefundToBank(personId, cents, note){
   addClothingSettlement({id:`bank-refund:${linkId}`,personId,date:today,amount,direction:"parent-to-child",
                          note:note||"Paid into bank"});
   saveFunds(); saveClothing(); return {ok:true};
+}
+
+/* =====================================================================
+   BANK TRANSFERS — Send money (gift/loan) and Pay back — 2026-09-12
+   One person's own money moving to another family member's own account. Same fundsLedger, same
+   signed-cents balance as everything else on the Bank page; nothing here is a second currency or a
+   new storage container. Two purposes only, chosen deliberately with no default:
+     gift  — completes. No debt, nothing more to track.
+     loan  — completes AND creates a debt: the recipient owes the sender until repaid.
+   Debt is derived, never stored, the same principle as the Home Crew score and the Clothing
+   settlement balance: it is the sum of that pair's loan legs minus that pair's repayment legs, read
+   fresh every time. There is deliberately no interest, due date, or extra approval step — Jason's
+   spec is explicit that a household loan between family members is not a financial product.
+
+   Every transfer and every repayment writes BOTH halves under one linkId and saves once, exactly
+   like the Clothing bridge above. A linked row can never be deleted or edited by the generic
+   "Record money" editor — fundKindOptions() omits these kinds from its dropdown, and its Save
+   handler independently re-checks the submitted kind so a tampered dropdown/seed can't create a
+   lone, unpaired half either; removeFundEntry already refuses to delete any row with a linkId.
+
+   Reversing a MISTAKE is two different actions depending on what was mistaken:
+     - a wrong GIFT reverses cleanly with an ordinary gift sent back — no debt was ever created, so
+       nothing but the cash needs to move.
+     - a wrong LOAN does NOT reverse with a gift back. transferDebt only nets transfer-in(loan) rows
+       against repay-out rows, so a gift flowing the other direction changes nobody's cash-derived
+       debt at all — it would leave the original debt fully intact while ALSO minting a second,
+       unrelated movement of money. The correct undo for a mistaken loan is Pay back for the full
+       mistaken amount: that is the one action that both returns the cash and is counted by
+       transferDebt, so it is the only thing that actually zeroes the debt. No separate "cancel this
+       loan" feature exists or is needed — Pay back already does the whole job.
+
+   Participants: moneyParticipants() (all of `people`, not fundsAccounts()) on purpose. Jason asked
+   for Dad to give, lend, borrow and be repaid exactly like the kids, without joining the child
+   allowance/job/clothing-wallet policies that fundsAccounts() gates. Dad gets no invented opening
+   balance — like everyone else, his balance is whatever has actually been recorded for him (a manual
+   deposit if he wants to fund the account, or money received from a gift/loan/repayment). Design
+   note flagged to misc: Dad's Bank card only appears once he has any ledger activity rather than
+   showing a $0.00 card for every adult who never uses this, but he is reachable before that first
+   transfer two ways — the header's "+ Record money" (its Who list is moneyParticipants(), not
+   fundsAccounts()) and a "Give them a starting balance first" link inside Send money itself whenever
+   the selected From/To person's balance is $0, so nobody is ever stuck unable to fund an empty
+   account before its card exists. See handoff-to-c.md. */
+const MAX_TRANSFER_CENTS=100000000; /* $1,000,000 household sanity cap, well under Number.MAX_SAFE_INTEGER */
+/* Amount owed by debtorId to creditorId specifically (loans debtor received from creditor, minus
+   what debtor has repaid to creditor). Directional and per-pair on purpose — matches the worked
+   example (one loan, partial repayments) and the "You owe X / X owes you" UI, and never nets against
+   a loan running the other way, since that would silently forgive part of a separate, deliberate loan. */
+function transferDebt(debtorId, creditorId){
+  if(!debtorId||!creditorId||debtorId===creditorId) return 0;
+  const loaned=fundsLedger.filter(e=>e.status==="approved"&&e.kind==="transfer-in"&&e.transferType==="loan"&&e.personId===debtorId&&e.counterpartyId===creditorId)
+    .reduce((s,e)=>s+finiteInt(e.amount,0),0);
+  const repaid=fundsLedger.filter(e=>e.status==="approved"&&e.kind==="repay-out"&&e.personId===debtorId&&e.counterpartyId===creditorId)
+    .reduce((s,e)=>s-finiteInt(e.amount,0),0);
+  return Math.max(0,loaned-repaid);
+}
+function debtsOwedByPerson(personId){
+  return moneyParticipants().filter(c=>c.id!==personId).map(c=>({person:c,amount:transferDebt(personId,c.id)})).filter(x=>x.amount>0);
+}
+function debtsOwedToPerson(personId){
+  return moneyParticipants().filter(d=>d.id!==personId).map(d=>({person:d,amount:transferDebt(d.id,personId)})).filter(x=>x.amount>0);
+}
+/* Rows created here are excluded from fundsEarnedSince/renderBankPage's household totals via
+   FUND_KIND_TRANSFER — money moving between two family accounts is neither earned nor spent.
+
+   A transfer participant must be a real current person AND, if they are the kind of person
+   fundsAccounts() would normally cover (a child, by isFundsParticipant), must not have had their
+   bank account explicitly turned off in Account settings. Dad and other adult role names default to
+   fundsPersonSettings(id).enabled===false too, but that default was never a deliberate disablement
+   for them — isFundsParticipant is what tells the two situations apart, so Dad stays eligible while
+   a parent's explicit "no account" choice for a child is honored, not silently bypassed by transfers. */
+function moneyParticipantEligible(personId){
+  const p=people.find(x=>x.id===personId);
+  if(!p) return {ok:false,error:"Pick a real family member."};
+  if(isFundsParticipant(p) && !fundsPersonSettings(p.id).enabled) return {ok:false,error:`${p.name}'s bank account is turned off — enable it in Account settings first.`};
+  return {ok:true};
+}
+/* cents must already be a clean integer number of cents (what parseMoneyToCents always returns).
+   Deliberately checked with Number.isInteger BEFORE any rounding/coercion — finiteInt() would
+   silently round a stray fractional value (a caller bug, e.g. raw dollars passed where cents were
+   expected) into a plausible-looking wrong amount instead of rejecting it. */
+function validTransferCents(cents){
+  return typeof cents==="number" && Number.isFinite(cents) && Number.isInteger(cents) && cents>0 && cents<=MAX_TRANSFER_CENTS;
+}
+function sendMoneyTransfer(fromId, toId, cents, isLoan, note){
+  if(!fromId||!toId) return {ok:false,error:"Pick who this is from and who it's for."};
+  if(fromId===toId) return {ok:false,error:"From and To must be different people."};
+  if(isLoan!==true && isLoan!==false) return {ok:false,error:"Choose whether this needs to be paid back."};
+  const fromOk=moneyParticipantEligible(fromId); if(!fromOk.ok) return fromOk;
+  const toOk=moneyParticipantEligible(toId); if(!toOk.ok) return toOk;
+  if(!validTransferCents(cents)) return {ok:false,error:"Enter a valid whole-cent amount above $0."};
+  const balance=fundsBalance(fromId);
+  if(cents>balance) return {ok:false,error:`${getPerson(fromId).name} only has ${money(balance)} available.`};
+  const linkId=uid("lnk"), today=todayStr(), fromName=getPerson(fromId).name, toName=getPerson(toId).name;
+  const kind=isLoan?"loan":"gift", cleanNote=String(note||"").trim().slice(0,140);
+  addFundEntry({personId:fromId,date:today,kind:"transfer-out",amount:-cents,linkId,counterpartyId:toId,transferType:kind,
+                note:cleanNote?`${isLoan?"Lent":"Gave"} ${toName}: ${cleanNote}`:`${isLoan?"Lent to":"Gave to"} ${toName}`});
+  addFundEntry({personId:toId,date:today,kind:"transfer-in",amount:cents,linkId,counterpartyId:fromId,transferType:kind,
+                note:cleanNote?`${isLoan?"Borrowed from":"Received from"} ${fromName}: ${cleanNote}`:`${isLoan?"Borrowed from":"Received from"} ${fromName}`});
+  saveFunds(); return {ok:true,linkId};
+}
+function payBackDebt(debtorId, creditorId, cents, note){
+  if(!debtorId||!creditorId) return {ok:false,error:"Pick who is paying back whom."};
+  if(debtorId===creditorId) return {ok:false,error:"From and To must be different people."};
+  const debtorOk=moneyParticipantEligible(debtorId); if(!debtorOk.ok) return debtorOk;
+  const creditorOk=moneyParticipantEligible(creditorId); if(!creditorOk.ok) return creditorOk;
+  const owed=transferDebt(debtorId,creditorId);
+  if(owed<=0) return {ok:false,error:"Nothing is owed there right now."};
+  if(!validTransferCents(cents)) return {ok:false,error:"Enter a valid whole-cent amount above $0."};
+  if(cents>owed) return {ok:false,error:`Only ${money(owed)} is owed — that would overpay the loan.`};
+  const balance=fundsBalance(debtorId);
+  if(cents>balance) return {ok:false,error:`${getPerson(debtorId).name} only has ${money(balance)} available.`};
+  const linkId=uid("lnk"), today=todayStr(), debtorName=getPerson(debtorId).name, creditorName=getPerson(creditorId).name;
+  const cleanNote=String(note||"").trim().slice(0,140);
+  addFundEntry({personId:debtorId,date:today,kind:"repay-out",amount:-cents,linkId,counterpartyId:creditorId,
+                note:cleanNote?`Paid back ${creditorName}: ${cleanNote}`:`Paid back ${creditorName}`});
+  addFundEntry({personId:creditorId,date:today,kind:"repay-in",amount:cents,linkId,counterpartyId:debtorId,
+                note:cleanNote?`Repaid by ${debtorName}: ${cleanNote}`:`Repaid by ${debtorName}`});
+  saveFunds(); return {ok:true,linkId};
+}
+/* Cards for people who hold a tracked transfer balance but are not full fundsAccounts() (Dad, most
+   often). Shown only once there is something to show — a nonzero balance, any ledger row, or a debt
+   in either direction — so an adult who has never touched the Bank stays invisible, and no $0.00
+   card is ever presented as though it were a real starting balance. */
+function transferOnlyParticipants(){
+  const already=new Set(fundsAccounts().map(p=>p.id));
+  return moneyParticipants().filter(p=>!already.has(p.id) &&
+    (fundsBalance(p.id)!==0 || fundsLedger.some(e=>e.personId===p.id) || debtsOwedByPerson(p.id).length || debtsOwedToPerson(p.id).length));
+}
+/* Everyone the Bank page actually shows a card for: fundsAccounts() plus any transfer-only
+   participant (Dad, once he has activity). renderBankPage's stat grid uses this union — not
+   fundsAccounts() alone — for its person-scoping and its "In the bank"/"Earned"/"Spent" totals, so
+   that (a) selecting Dad's own scope shows Dad's own total instead of a blank $0 page, and (b) a
+   transfer to or from Dad doesn't make the household "In the bank" figure look like money vanished
+   or appeared from nowhere — it is still all there, just previously uncounted because Dad's card
+   wasn't. Job/allowance/clothing-wallet eligibility is untouched: that is still fundsAccounts() only. */
+function bankParticipants(){
+  const already=new Set(fundsAccounts().map(p=>p.id));
+  return fundsAccounts().concat(transferOnlyParticipants().filter(p=>!already.has(p.id)));
 }
 
 /* =====================================================================
@@ -5940,9 +6115,9 @@ function fundsPersonOptions(selected, allLabel){
   return head+fundsAccounts().map(p=>`<option value="${p.id}" ${p.id===selected?"selected":""}>${esc(p.name)}</option>`).join("");
 }
 function fundKindOptions(selected){
-  /* Clothing kinds are omitted: they only exist as one half of a linked transfer and are created by
-     the bridge helpers, never typed in by hand. */
-  return Object.entries(FUND_KINDS).filter(([k])=>!FUND_KIND_CLOTHING.has(k))
+  /* Clothing and Bank-transfer kinds are omitted: they only exist as one half of a linked transfer
+     and are created by the bridge/transfer helpers, never typed in by hand. */
+  return Object.entries(FUND_KINDS).filter(([k])=>!FUND_KIND_CLOTHING.has(k)&&!FUND_KIND_TRANSFER.has(k))
     .map(([k,v])=>`<option value="${k}" ${k===selected?"selected":""}>${esc(v.label)}</option>`).join("");
 }
 function fundsClothingOweHtml(personId){
@@ -5952,16 +6127,30 @@ function fundsClothingOweHtml(personId){
   if(net<0) return `<div class="fn-owe credit">Dad owes <b>${money(-net)}</b> back for clothing.${gap}</div>`;
   return `<div class="fn-owe">Clothing is settled up.${gap}</div>`;
 }
+/* Written from this card's own point of view, matching Jason's spec exactly: the borrower's own
+   card says "You owe", the lender's own card says "X owes you". The Send money confirmation line
+   (openSendMoneyModal) uses third person instead, because that one is composed by whoever is
+   sending, about two other people. */
+function fundsTransferOweHtml(personId){
+  const owe=debtsOwedByPerson(personId), owed=debtsOwedToPerson(personId);
+  if(!owe.length&&!owed.length) return "";
+  const oweLines=owe.map(x=>`<div class="fn-owe debt">You owe ${esc(x.person.name)} <b>${money(x.amount)}</b>
+      <button class="btn sm fn-repay" data-debtor="${personId}" data-creditor="${x.person.id}">Pay back</button></div>`).join("");
+  const owedLines=owed.map(x=>`<div class="fn-owe credit">${esc(x.person.name)} owes you <b>${money(x.amount)}</b></div>`).join("");
+  return oweLines+owedLines;
+}
 function renderFundsAccounts(){
   const el=document.getElementById("fnAccounts"), all=fundsAccounts();
-  const scoped=scopeTo(all), list=scoped?all.filter(p=>p.id===scoped):all;
+  const scoped=scopeTo(moneyParticipants());
+  const list=scoped?all.filter(p=>p.id===scoped):all;
+  const transferOnly=transferOnlyParticipants(), transferOnlyList=scoped?transferOnly.filter(p=>p.id===scoped):transferOnly;
   paintScopeChip("bkScope", scoped);
-  if(!list.length){
-    el.innerHTML=`<div class="empty-state"><div class="big">No accounts yet.</div>Open Account settings to give a child a bank account.</div>`;
+  if(!list.length && !transferOnlyList.length){
+    el.innerHTML=`<div class="empty-state"><div class="big">No accounts yet.</div>Open Account settings to give a child a bank account, or use Send money to start one for anyone in the family.</div>`;
     return;
   }
   const weekStart=addDaysStr(todayStr(),-6);
-  el.innerHTML=list.map(p=>{
+  const fullCards=list.map(p=>{
     const cfg=fundsPersonSettings(p.id), bal=fundsBalance(p.id), pend=fundsPendingTotal(p.id), week=fundsEarnedSince(p.id,weekStart);
     const pct=cfg.goalCents>0?Math.max(0,Math.min(100,bal/cfg.goalCents*100)):0;
     const short=Math.max(0,cfg.goalCents-bal);
@@ -5985,10 +6174,26 @@ function renderFundsAccounts(){
       </div>
       ${goal}
       ${fundsClothingOweHtml(p.id)}
+      ${fundsTransferOweHtml(p.id)}
       </article>`;
   }).join("");
+  /* Compact card: balance, transfers only. No jobs, allowance, savings goal or clothing-wallet
+     button — those stay gated to fundsAccounts() exactly as before. */
+  const transferCards=transferOnlyList.map(p=>{
+    const bal=fundsBalance(p.id);
+    return `<article class="bk-card" style="--who:${p.color}" aria-label="${esc(p.name)}'s account">
+      <div class="bk-card-top"><span class="bk-name">${hgAvatar(p)}${esc(p.name)}</span><span class="bk-brand">Family Bank</span></div>
+      <div class="bk-label">Available balance</div>
+      <div class="fn-balance ${bal<0?"neg":""}">${money(bal)}</div>
+      <div class="fn-sub">Not enrolled in jobs, allowance or clothing — just a tracked balance for money sent, lent or repaid.</div>
+      <div class="bk-actions"><button class="btn add bk-primary fn-add" data-id="${p.id}">+ Pay in</button></div>
+      ${fundsTransferOweHtml(p.id)}
+      </article>`;
+  }).join("");
+  el.innerHTML=fullCards+transferCards;
   el.querySelectorAll(".fn-add").forEach(b=>b.addEventListener("click",()=>openFundEntryModal({personId:b.dataset.id,kind:"deposit"})));
   el.querySelectorAll(".fn-spend").forEach(b=>b.addEventListener("click",()=>openFundEntryModal({personId:b.dataset.id,kind:"spend"})));
+  el.querySelectorAll(".fn-repay").forEach(b=>b.addEventListener("click",()=>openPayBackModal(b.dataset.debtor,b.dataset.creditor)));
   el.querySelectorAll(".fn-to-wallet").forEach(b=>b.addEventListener("click",()=>openClothingTransferModal(b.dataset.id)));
   el.querySelectorAll(".fn-pay").forEach(b=>b.addEventListener("click",()=>openClothingBillModal(b.dataset.id)));
 }
@@ -6041,6 +6246,7 @@ function filteredFundsLedger(){
     if(kind==="out") return e.status==="approved"&&e.amount<0;
     if(kind==="pending") return e.status==="pending";
     if(kind==="clothing") return FUND_KIND_CLOTHING.has(e.kind);
+    if(kind==="transfer") return FUND_KIND_TRANSFER.has(e.kind);
     return true;
   });
 }
@@ -6339,14 +6545,19 @@ function renderFundsPage(){
 function renderBankPage(){
   if(ensureFundsPersonSettings()|ensureWeeklyAllowances()) saveFunds();
   renderFundsAccounts();
-  const allAccounts=fundsAccounts(), statScope=scopeTo(allAccounts);
+  /* bankParticipants(), not fundsAccounts() alone: every card actually shown on this page (Dad
+     included, once he has activity) must count toward its own stats and be selectable as its own
+     scope — see bankParticipants() above. */
+  const allAccounts=bankParticipants(), statScope=scopeTo(allAccounts);
   const accounts=statScope?allAccounts.filter(p=>p.id===statScope):allAccounts;
   const ids=new Set(accounts.map(p=>p.id));
   const rows=fundsLedger.filter(e=>ids.has(e.personId)&&e.status==="approved");
   const monthStart=todayStr().slice(0,7)+"-01", weekStart=addDaysStr(todayStr(),-6);
   const total=accounts.reduce((s,p)=>s+fundsBalance(p.id),0);
-  const earnedMonth=rows.filter(e=>e.amount>0&&e.date>=monthStart).reduce((s,e)=>s+e.amount,0);
-  const spentMonth=rows.filter(e=>e.amount<0&&e.date>=monthStart).reduce((s,e)=>s-e.amount,0);
+  /* Bank transfers/repayments are excluded from both totals: money that moved between two family
+     accounts was neither earned nor spent by the household, just relocated. */
+  const earnedMonth=rows.filter(e=>e.amount>0&&!FUND_KIND_TRANSFER.has(e.kind)&&e.date>=monthStart).reduce((s,e)=>s+e.amount,0);
+  const spentMonth=rows.filter(e=>e.amount<0&&!FUND_KIND_TRANSFER.has(e.kind)&&e.date>=monthStart).reduce((s,e)=>s-e.amount,0);
   const jobsWeek=rows.filter(e=>e.kind==="job"&&e.date>=weekStart).length;
   const toClothing=rows.filter(e=>FUND_KIND_CLOTHING.has(e.kind)&&e.amount<0).reduce((s,e)=>s-e.amount,0);
   /* Scoped like every other stat here so the grid agrees with the cards above it. The queue and
@@ -6359,21 +6570,24 @@ function renderBankPage(){
   document.getElementById("fnStatGrid").innerHTML=stats.map(([v,l])=>`<div class="fn-stat"><div class="fn-stat-value">${esc(v)}</div><div class="fn-stat-label">${esc(l)}</div></div>`).join("");
   const pf=document.getElementById("fnPersonFilter"), old=pf.value||"all";
   const want=activePerson; pf.hidden=activePerson!=="all";
-  pf.innerHTML=fundsPersonOptions(want,"Everyone");
+  /* Broader than fundsAccounts(): Dad and other transfer-only participants can appear in ledger
+     rows (a gift, loan or repayment) even without a full account, so the filter must be able to
+     find them. */
+  pf.innerHTML=moneyPersonOptions(want,"Everyone");
   pf.value=[...pf.options].some(o=>o.value===want)?want:"all";
   renderFundsLedger();
 }
 
 /* ---------------- Money modals ---------------- */
 function openFundEntryModal(seed){
-  const s=seed||{}, accounts=fundsAccounts();
-  if(!accounts.length){ alert("Give someone a bank account in Settings first."); return; }
-  const personId=s.personId||scopeTo(accounts)||accounts[0].id, kind=FUND_KINDS[s.kind]&&!FUND_KIND_CLOTHING.has(s.kind)?s.kind:"deposit";
+  const s=seed||{}, participants=moneyParticipants();
+  if(!participants.length){ alert("Add a family member first."); return; }
+  const personId=s.personId||scopeTo(participants)||participants[0].id, kind=FUND_KINDS[s.kind]&&!FUND_KIND_CLOTHING.has(s.kind)&&!FUND_KIND_TRANSFER.has(s.kind)?s.kind:"deposit";
   openClModal(modal=>{
     modal.innerHTML=`<h2>${s.kind==="deposit"?"Pay in":s.kind==="spend"?"Record a purchase":"Record money"}</h2>
-      <div class="cl-modal-sub">Money in and money out, recorded straight away. Clothing transfers have their own buttons so both sides always agree.</div>
+      <div class="cl-modal-sub">Money in and money out, recorded straight away. Clothing transfers and Bank transfers have their own buttons so both sides always agree.</div>
       <div class="cl-form-grid">
-        <div class="cl-field"><label>Who</label><select id="feWho">${fundsPersonOptions(personId,null)}</select></div>
+        <div class="cl-field"><label>Who</label><select id="feWho">${moneyPersonOptions(personId,null)}</select></div>
         <div class="cl-field"><label>Kind</label><select id="feKind">${fundKindOptions(kind)}</select></div>
         <div class="cl-field"><label>Amount</label><input id="feAmount" type="number" min="0" step="0.01" placeholder="0.00"></div>
         <div class="cl-field"><label>Date</label><input id="feDate" type="date" value="${esc(todayStr())}"></div>
@@ -6399,6 +6613,10 @@ function openFundEntryModal(seed){
       const date=modal.querySelector("#feDate").value||todayStr();
       const note=modal.querySelector("#feNote").value.trim();
       if(!who) return fail("Pick who this is for.");
+      /* Defense in depth: fundKindOptions() already omits these from the dropdown, but this
+         re-checks the actual submitted value so a tampered <select> or a seed object that slipped
+         past the constructor above still can't create a lone, unpaired half of a linked row here. */
+      if(!FUND_KINDS[k] || FUND_KIND_CLOTHING.has(k) || FUND_KIND_TRANSFER.has(k)) return fail("That kind can only be created from its own button.");
       if(!Number.isFinite(raw)||raw===0) return fail("Enter an amount that isn't zero.");
       const dir=(FUND_KINDS[k]||{}).dir;
       if(dir!=="any" && raw<0) return fail("Enter a positive amount — the kind already decides the direction.");
@@ -6457,6 +6675,126 @@ function openClothingBillModal(personId){
       const cents=parseMoneyToCents(modal.querySelector("#fbAmount").value), note=modal.querySelector("#fbNote").value.trim();
       const r=owing?bankPaysClothingBill(personId,cents,note):clothingRefundToBank(personId,cents,note);
       if(!r.ok){ err.textContent=r.error; err.classList.remove("hidden"); return; }
+      closeClModal(); render();
+    });
+  });
+}
+/* Guards a rapid double-tap/double-click landing two identical transfers before a disabled button
+   takes effect: the exact same (kind, from, to, amount, choice, note) submitted again within a few
+   seconds is refused rather than recorded twice. Legitimate repeats (a second, separate loan of the
+   same amount a minute later) are unaffected once the window passes. */
+let lastTransferSubmit=null;
+function transferDuplicateGuard(sig){
+  const now=Date.now();
+  if(lastTransferSubmit && lastTransferSubmit.sig===sig && now-lastTransferSubmit.at<4000) return true;
+  lastTransferSubmit={sig,at:now};
+  return false;
+}
+function openSendMoneyModal(seed){
+  const s=seed||{}, participants=moneyParticipants();
+  if(participants.length<2){ alert("Add at least two family members first."); return; }
+  const scoped=scopeTo(participants);
+  const fromId=s.fromId||scoped||participants[0].id;
+  const toId=(participants.find(p=>p.id!==fromId)||{}).id||"";
+  openClModal(modal=>{
+    modal.innerHTML=`<h2>Send money</h2>
+      <div class="cl-modal-sub">Move one person's own money to another family member. No interest, no due date, no extra approval — just choose whether it needs to be paid back.</div>
+      <div class="cl-form-grid">
+        <div class="cl-field"><label>From</label><select id="smFrom">${moneyPersonOptions(fromId,null)}</select>
+          <div class="fn-goal-note" id="smFundFrom" hidden>They have $0.00 available — <a href="#" id="smFundFromLink">give them a starting balance first</a>.</div>
+        </div>
+        <div class="cl-field"><label>To</label><select id="smTo">${moneyPersonOptions(toId,null)}</select></div>
+        <div class="cl-field"><label>Amount</label><input id="smAmount" type="number" min="0" step="0.01" placeholder="0.00"></div>
+        <div class="cl-field full"><label>Does this need to be paid back?</label>
+          <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:4px">
+            <label class="sm-repay-option"><input type="radio" name="smRepay" value="no" id="smRepayNo"> No — it's a gift</label>
+            <label class="sm-repay-option"><input type="radio" name="smRepay" value="yes" id="smRepayYes"> Yes — it's a loan</label>
+          </div>
+        </div>
+        <div class="cl-field full"><label>Note (optional)</label><input id="smNote" type="text" maxlength="140" placeholder="Birthday money, movie tickets…"></div>
+      </div>
+      <div class="cl-warning" id="smSummary">Choose an amount and whether this is a loan to see the confirmation.</div>
+      <div class="cl-error hidden" id="smError"></div>
+      <div class="cl-modal-actions"><button class="btn" id="smCancel">Cancel</button><button class="btn add" id="smSave">Send it</button></div>`;
+    const fromSel=modal.querySelector("#smFrom"), toSel=modal.querySelector("#smTo"), amtInput=modal.querySelector("#smAmount");
+    const summary=modal.querySelector("#smSummary"), err=modal.querySelector("#smError");
+    const paint=()=>{
+      err.classList.add("hidden");
+      const from=getPerson(fromSel.value), to=getPerson(toSel.value);
+      const bal=fromSel.value?fundsBalance(fromSel.value):0;
+      const cents=parseMoneyToCents(amtInput.value);
+      const repay=modal.querySelector('input[name="smRepay"]:checked');
+      const fundHint=modal.querySelector("#smFundFrom");
+      fundHint.hidden = !(from && bal===0);
+      if(from && bal===0) fundHint.dataset.person=fromSel.value;
+      if(!from||!to||fromSel.value===toSel.value){ summary.textContent="Pick two different people."; return; }
+      if(!cents){ summary.textContent=`${from.name} has ${money(bal)} available. Enter an amount to see the confirmation.`; return; }
+      if(!repay){ summary.textContent=`${from.name} has ${money(bal)} available. Choose whether ${to.name} needs to pay this back.`; return; }
+      summary.textContent = repay.value==="yes"
+        ? `${from.name} is lending ${to.name} ${money(cents)}. ${to.name} will owe ${from.name} ${money(cents)}.`
+        : `${from.name} is giving ${to.name} ${money(cents)}. No repayment needed.`;
+    };
+    [fromSel,toSel,amtInput].forEach(el=>el.addEventListener("input",paint));
+    modal.querySelectorAll('input[name="smRepay"]').forEach(r=>r.addEventListener("change",paint));
+    fromSel.addEventListener("change",()=>{
+      if(toSel.value===fromSel.value){ const alt=moneyParticipants().find(p=>p.id!==fromSel.value); if(alt) toSel.value=alt.id; }
+      paint();
+    });
+    /* Reachable before any transfer can succeed: an empty account (most often a freshly-added Dad,
+       but this is generic to anyone) gets a direct path to fund itself, not just a dead-end
+       "insufficient balance" error on Send. No balance is invented — this opens the same manual
+       Record money editor everyone else uses. */
+    modal.querySelector("#smFundFromLink").addEventListener("click",e=>{
+      e.preventDefault();
+      const pid=modal.querySelector("#smFundFrom").dataset.person||fromSel.value;
+      closeClModal();
+      openFundEntryModal({personId:pid,kind:"deposit"});
+    });
+    paint();
+    modal.querySelector("#smCancel").addEventListener("click",closeClModal);
+    const saveBtn=modal.querySelector("#smSave");
+    saveBtn.addEventListener("click",()=>{
+      const fail=m=>{ err.textContent=m; err.classList.remove("hidden"); };
+      const from=fromSel.value, to=toSel.value, repay=modal.querySelector('input[name="smRepay"]:checked');
+      const cents=parseMoneyToCents(amtInput.value), note=modal.querySelector("#smNote").value.trim();
+      if(!from||!to) return fail("Pick who this is from and who it's for.");
+      if(from===to) return fail("From and To must be different people.");
+      if(!repay) return fail("Choose whether this needs to be paid back.");
+      if(!cents) return fail("Enter an amount above $0.");
+      const sig=`send:${from}:${to}:${cents}:${repay.value}:${note}`;
+      if(transferDuplicateGuard(sig)) return fail("That looks like the same transfer you just sent — check Transactions below before sending it again.");
+      saveBtn.disabled=true;
+      const r=sendMoneyTransfer(from,to,cents,repay.value==="yes",note);
+      if(!r.ok){ saveBtn.disabled=false; fail(r.error); return; }
+      closeClModal(); render();
+    });
+  });
+}
+function openPayBackModal(debtorId, creditorId){
+  const owed=transferDebt(debtorId,creditorId);
+  if(owed<=0){ alert("Nothing is owed there right now."); return; }
+  const debtor=getPerson(debtorId), creditor=getPerson(creditorId), bal=fundsBalance(debtorId);
+  const suggested=Math.min(owed,Math.max(0,bal));
+  openClModal(modal=>{
+    modal.innerHTML=`<h2>Pay ${esc(creditor.name)} back</h2>
+      <div class="cl-modal-sub">You owe ${esc(creditor.name)} <b>${money(owed)}</b>. Bank balance: <b>${money(bal)}</b>. Pay all of it or part of it — whatever you choose.</div>
+      <div class="cl-form-grid">
+        <div class="cl-field"><label>Amount</label><input id="pbAmount" type="number" min="0" step="0.01" value="${(suggested/100).toFixed(2)}"></div>
+        <div class="cl-field full"><label>Note (optional)</label><input id="pbNote" type="text" maxlength="140" placeholder="Paid back the ${esc(creditor.name)} loan"></div>
+      </div>
+      <div class="cl-error hidden" id="pbError"></div>
+      <div class="cl-modal-actions"><button class="btn" id="pbCancel">Cancel</button><button class="btn add" id="pbSave">Pay it back</button></div>`;
+    modal.querySelector("#pbCancel").addEventListener("click",closeClModal);
+    const saveBtn=modal.querySelector("#pbSave"), err=modal.querySelector("#pbError");
+    saveBtn.addEventListener("click",()=>{
+      const fail=m=>{ err.textContent=m; err.classList.remove("hidden"); };
+      const cents=parseMoneyToCents(modal.querySelector("#pbAmount").value), note=modal.querySelector("#pbNote").value.trim();
+      if(!cents) return fail("Enter an amount above $0.");
+      const sig=`repay:${debtorId}:${creditorId}:${cents}:${note}`;
+      if(transferDuplicateGuard(sig)) return fail("That looks like the same repayment you just sent — check Transactions below before sending it again.");
+      saveBtn.disabled=true;
+      const r=payBackDebt(debtorId,creditorId,cents,note);
+      if(!r.ok){ saveBtn.disabled=false; fail(r.error); return; }
       closeClModal(); render();
     });
   });
@@ -6523,6 +6861,7 @@ function openFundsSettingsModal(){
   });
 }
 
+document.getElementById("fnSendMoneyBtn").addEventListener("click",()=>openSendMoneyModal({}));
 document.getElementById("fnNewEntryBtn").addEventListener("click",()=>openFundEntryModal({}));
 document.getElementById("fnJobsBtn").addEventListener("click",openFundsJobsModal);
 document.getElementById("fnSettingsBtn").addEventListener("click",openFundsSettingsModal);
