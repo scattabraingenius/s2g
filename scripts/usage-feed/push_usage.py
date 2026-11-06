@@ -86,6 +86,28 @@ def slim(entry):
     return item
 
 
+def fetch_costs():
+    """Only aggregate daily totals leave the Mac; projects, paths and models are excluded."""
+    try:
+        out = subprocess.run([CODEXBAR, "cost", "--provider", "both", "--format", "json"],
+                             capture_output=True, text=True, timeout=120)
+        rows = json.loads(out.stdout)
+    except (ValueError, subprocess.TimeoutExpired, OSError):
+        return {}
+    result = {}
+    for row in rows:
+        pid = row.get("provider")
+        if pid not in PROVIDERS or row.get("error"):
+            continue
+        daily = [{"date": d.get("date"), "costUSD": d.get("totalCost"), "tokens": d.get("totalTokens")}
+                 for d in row.get("daily", []) if d.get("date")]
+        result[pid] = {"updatedAt": row.get("updatedAt"), "currencyCode": "USD",
+                       "todayCostUSD": row.get("sessionCostUSD"), "todayTokens": row.get("sessionTokens"),
+                       "totalCostUSD": row.get("last30DaysCostUSD"), "totalTokens": row.get("last30DaysTokens"),
+                       "daily": daily[-30:], "provenance": "listPriceEstimate"}
+    return result
+
+
 def sample_of(providers):
     return {p["id"]: {w["key"]: w["usedPercent"] for w in p.get("windows", [])}
             for p in providers if p.get("windows")}
@@ -96,6 +118,11 @@ def main():
     raw = fetch()
     providers = [slim(e) for e in raw if e.get("provider") in PROVIDERS]
     state = json.loads(STATE.read_text()) if STATE.exists() else {}
+    config = json.loads(CONFIG.read_text()) if CONFIG.exists() else {}
+    costs = fetch_costs() if config.get("include_cost_history") is True else {}
+    for p in providers:
+        if p["id"] in costs:
+            p["cost"] = costs[p["id"]]
     history = state.get("history", [])
     now = time.time()
     cutoff = now - HISTORY_DAYS * 86400
@@ -104,9 +131,11 @@ def main():
     # One sample whenever a number moves, plus one an hour so flat stretches still draw a line.
     last = history[-1] if history else None
     if sample and (not last or last["u"] != sample or now - parse_iso(last["t"]) >= 3600):
-        history.append({"t": now_iso(), "u": sample})
+        history.append({"t": now_iso(), "u": sample,
+                        "r": {p["id"]: {w["key"]: w.get("resetsAt") for w in p.get("windows", [])}
+                              for p in providers}})
 
-    payload = {"v": 1, "checkedAt": now_iso(), "providers": providers, "history": history}
+    payload = {"v": 2, "checkedAt": now_iso(), "providers": providers, "history": history}
     if dry:
         print(json.dumps(payload, indent=1))
         return

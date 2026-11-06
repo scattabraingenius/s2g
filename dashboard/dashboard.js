@@ -128,129 +128,26 @@ function fmtLeft(ms){
 }
 function fmtAgo(ms){ const m = Math.round(ms / 60000); return m < 1 ? "just now" : m < 60 ? `${m} min ago` : `${fmtLeft(ms)} ago`; }
 
-/* Expected use so far if spending evenly across the window. */
-function expectedUsed(win, now){
-  const end = Date.parse(win.resetsAt), span = win.windowMinutes * 60000;
-  return Math.max(0, Math.min(100, 100 * (1 - (end - now) / span)));
-}
-function paceOf(win, now){
-  const exp = win.pace?.expectedUsedPercent ?? Math.round(expectedUsed(win, now));
-  const delta = win.pace?.deltaPercent ?? (win.usedPercent - exp);
-  if(win.pace && win.pace.willLastToReset === false) return {cls:"bad", text:"⚠ Runs out before reset", exp};
-  if(delta <= -3) return {cls:"good", text:`▼ ${-delta}% in reserve`, exp};
-  if(delta >= 3) return {cls:"warn", text:`▲ ${delta}% over pace`, exp};
-  return {cls:"", text:"● On pace", exp};
-}
-
-function usageCard(el, p, now){
-  const id = el.dataset.provider, name = id === "claude" ? "Claude" : "Codex";
-  el.style.setProperty("--pc", PROVIDER_COLOR[id]);
-  const head = plan => `<div class="prov"><span class="prov-dot"></span><span class="prov-name">${name}</span>${plan ? `<span class="prov-plan">${esc(plan)}</span>` : ""}</div>`;
-  if(feedError === "setup"){ el.innerHTML = head() + `<div class="empty">The usage feed is not connected yet. On the Mac, run <code>scripts/usage-feed/install.sh</code>, then put the gist id in <code>dashboard/dashboard.js</code>.</div>`; return; }
-  if(!p){ el.innerHTML = head() + `<div class="empty">${feedError ? "Could not load the usage feed." : "Loading…"}</div>`; return; }
-  if(p.error){ el.innerHTML = head() + `<div class="empty">CodexBar could not read ${name}: ${esc(p.error)}</div>`; return; }
-  let html = head(p.plan);
-  for(const w of p.windows){
-    const pace = paceOf(w, now), resetMs = Date.parse(w.resetsAt) - now;
-    html += `<div class="win">
-      <div class="win-top"><span class="win-label">${esc(w.label)}</span><span class="win-pct">${w.usedPercent}% <small>used</small></span></div>
-      <div class="bar" role="img" aria-label="${w.usedPercent}% used, ${pace.exp}% expected by now">
-        <div class="bar-fill" style="width:${Math.min(100, w.usedPercent)}%"></div>
-        <div class="bar-pace" style="left:calc(${pace.exp}% - 1px)" title="Even pace: ${pace.exp}% by now"></div></div>
-      <div class="win-meta"><span class="pace ${pace.cls}">${pace.text}</span><span>Resets in ${fmtLeft(resetMs)}</span></div>
-    </div>`;
-  }
-  const extras = [];
-  if(p.resetCredits) extras.push(`${p.resetCredits.available} free reset${p.resetCredits.available === 1 ? "" : "s"} · next expires in ${fmtLeft(Date.parse(p.resetCredits.nextExpiresAt) - now)}`);
-  if(p.extra) extras.push(`Extra usage: ${p.extra.used} of ${p.extra.limit} ${esc(p.extra.currencyCode)}`);
-  if(extras.length) html += `<div class="extra">${extras.join("<br>")}</div>`;
-  el.innerHTML = html;
-}
-
-/* ---------------- burn-down ---------------- */
-const W = 320, H = 150, PL = 28, PR = 8, PT = 8, PB = 20;
-
-/* "% left" samples inside this window, ending with the live value. */
-function windowPoints(p, w, history, now){
-  const end = Date.parse(w.resetsAt), start = end - w.windowMinutes * 60000;
-  const pts = history.filter(h => { const t = Date.parse(h.t); return t >= start && t <= now && h.u[p.id]?.[w.key] != null; })
-                     .map(h => ({t:Date.parse(h.t), left:100 - h.u[p.id][w.key]}));
-  pts.push({t:now, left:100 - w.usedPercent});
-  return pts;
-}
-
-function burnChart(p, w, pts, now){
-  const end = Date.parse(w.resetsAt), start = end - w.windowMinutes * 60000;
-  const x = t => PL + (t - start) / (end - start) * (W - PL - PR);
-  const y = left => PT + (100 - left) / 100 * (H - PT - PB);
-  const weekly = w.windowMinutes >= 1440;
-  const ticks = [];
-  const tickFmt = t => weekly ? new Date(t).toLocaleDateString([], {weekday:"short"}) : new Date(t).toLocaleTimeString([], {hour:"numeric"});
-  for(let i = 0; i <= 4; i++){ const t = start + (end - start) * i / 4; ticks.push(`<text class="axis" x="${x(t)}" y="${H - 5}" text-anchor="${i === 0 ? "start" : i === 4 ? "end" : "middle"}">${i === 4 ? "reset" : tickFmt(t)}</text>`); }
-  const grid = [0, 50, 100].map(v => `<line class="grid-line" x1="${PL}" x2="${W - PR}" y1="${y(v)}" y2="${y(v)}"/><text class="axis" x="${PL - 5}" y="${y(v) + 3}" text-anchor="end">${v}%</text>`).join("");
-  // Usage only moves up between samples, so draw steps rather than slopes.
-  let d = `M${x(pts[0].t)},${y(pts[0].left)}`;
-  for(let i = 1; i < pts.length; i++) d += ` H${x(pts[i].t)} V${y(pts[i].left)}`;
-  const last = pts[pts.length - 1];
-  const area = `${d} V${y(0)} H${x(pts[0].t)} Z`;
-  const pace = paceOf(w, now);
-  const label = `${p.name} ${w.label}: ${last.left}% left, ${fmtLeft(end - now)} until reset. ${pace.text.slice(2)}.`;
-  const rows = pts.map(q => `<tr><td>${new Date(q.t).toLocaleString()}</td><td>${q.left}% left</td></tr>`).join("");
-  return `<div class="chart" style="--pc:${PROVIDER_COLOR[p.id]}" data-start="${start}" data-end="${end}">
-    <div class="chart-head"><b>${esc(p.name)} · ${esc(w.label)}</b><span class="pace ${pace.cls}">${last.left}% left</span></div>
-    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)}">
-      ${grid}${ticks.join("")}
-      <line class="pace-line" x1="${x(start)}" y1="${y(100)}" x2="${x(end)}" y2="${y(0)}"/>
-      <path class="used-area" d="${area}"/><path class="used-line" d="${d}"/>
-      <circle class="now-dot" cx="${x(last.t)}" cy="${y(last.left)}" r="4"/>
-      ${pts.length < 3 ? `<text class="hint" x="${x(last.t) > W / 2 ? x(last.t) - 8 : x(last.t) + 8}" y="${y(last.left) + (last.left > 80 ? 16 : -8)}" text-anchor="${x(last.t) > W / 2 ? "end" : "start"}">history builds as the feed runs</text>` : ""}
-      <line class="xhair" y1="${PT}" y2="${H - PB}" visibility="hidden"/>
-    </svg>
-    <div class="tip" hidden></div>
-    <div class="legend"><span><i></i>% left</span><span><i class="dash"></i>even pace</span></div>
-    <div class="sr"><table><caption>${esc(label)}</caption>${rows}</table></div>
-  </div>`;
-}
-
-function wireChart(el, pts, w){
-  const svg = el.querySelector("svg"), tip = el.querySelector(".tip"), hair = el.querySelector(".xhair");
-  const start = +el.dataset.start, end = +el.dataset.end;
-  const toT = px => start + (px - PL) / (W - PL - PR) * (end - start);
-  svg.addEventListener("pointermove", e => {
-    const box = svg.getBoundingClientRect(), vx = (e.clientX - box.left) / box.width * W;
-    const t = toT(vx);
-    if(t < start || t > Math.max(...pts.map(q => q.t))) return hide();
-    let q = pts[0]; for(const c of pts) if(c.t <= t) q = c;   // the step that covers this moment
-    const even = Math.max(0, Math.round(100 - expectedUsed(w, t)));
-    hair.setAttribute("x1", vx); hair.setAttribute("x2", vx); hair.setAttribute("visibility", "visible");
-    tip.hidden = false; tip.style.left = (vx / W * 100) + "%"; tip.style.top = "38px";
-    tip.textContent = `${new Date(t).toLocaleString([], {weekday:"short", hour:"numeric", minute:"2-digit"})} · ${q.left}% left (pace ${even}%)`;
-  });
-  const hide = () => { tip.hidden = true; hair.setAttribute("visibility", "hidden"); };
-  svg.addEventListener("pointerleave", hide);
-}
-
 function renderUsage(){
   const now = Date.now();
   const byId = Object.fromEntries((feed?.providers || []).map(p => [p.id, p]));
-  document.querySelectorAll(".usage").forEach(el => usageCard(el, byId[el.dataset.provider], now));
-
+  for(const type of ['burn','history']){
+    const row = $(type === 'burn' ? 'burnRow' : 'historyRow');
+    row.innerHTML = ['codex','claude'].map(id => {
+      const p = byId[id];
+      if(!p) return `<article class="provider-widget" style="--pc:${PROVIDER_COLOR[id]}"><b>${id === 'codex' ? 'Codex' : 'Claude'}</b><p class="empty">${feedError ? 'Usage feed unavailable. Retry refresh.' : feed ? 'Provider unavailable in feed.' : 'Loading…'}</p></article>`;
+      return `<article class="provider-widget" style="--pc:${PROVIDER_COLOR[id]}">${GrindWidgets.card(p,type,feed,now,!!feedError)}</article>`;
+    }).join('');
+  }
   const age = feed?.checkedAt ? now - Date.parse(feed.checkedAt) : null;
-  $("feedAge").textContent = age == null ? "" : age > FEED_STALE_MS ? `Last update ${fmtAgo(age)}. Is the Mac asleep?` : `Updated ${fmtAgo(age)}`;
-  $("feedAge").classList.toggle("pace", age > FEED_STALE_MS); $("feedAge").classList.toggle("warn", age > FEED_STALE_MS);
-
-  const row = $("burnRow"), charts = [];
-  for(const id of ["claude", "codex"]){ const p = byId[id]; if(p && !p.error) for(const w of p.windows) charts.push([p, w]); }
-  if(!charts.length){ row.innerHTML = `<div class="empty">${feedError === "setup" ? "Charts appear once the usage feed is connected." : feedError ? "Could not load the usage feed." : "Loading…"}</div>`; return; }
-  const history = feed.history || [];
-  const series = charts.map(([p, w]) => windowPoints(p, w, history, now));
-  row.innerHTML = charts.map(([p, w], i) => burnChart(p, w, series[i], now)).join("");
-  row.querySelectorAll(".chart").forEach((el, i) => wireChart(el, series[i], charts[i][1]));
+  $('feedAge').textContent = feedError ? 'Feed unavailable · showing last received readings' : age == null ? '' : `Feed checked ${fmtAgo(age)}`;
+  $('feedAge').classList.toggle('warn', !!feedError || age > FEED_STALE_MS);
 }
+$('refreshUsage').onclick = () => loadFeed();
 
 /* ---------------- start ---------------- */
 tickClock(); setInterval(tickClock, 1000);
 loadWeather(); setInterval(loadWeather, 30 * 60 * 1000);
 loadFeed(); setInterval(loadFeed, FEED_POLL_MS);
-setInterval(renderUsage, 60 * 1000);   // keep "resets in" and the now-dot moving between fetches
+setInterval(renderUsage, 60 * 1000);   // Update countdowns; measurement timestamps stay fixed.
 document.addEventListener("visibilitychange", () => { if(!document.hidden){ loadFeed(); tickClock(); } });

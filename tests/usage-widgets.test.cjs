@@ -1,0 +1,11 @@
+const {test}=require('node:test');const assert=require('node:assert/strict');const w=require('../dashboard/usage-widgets.js');
+const now=Date.parse('2026-11-06T16:00:00Z');
+const win={key:'secondary',label:'Weekly',usedPercent:32,windowMinutes:10080,resetsAt:'2026-11-11T10:40:42Z',pace:{deltaPercent:1}};
+const p={id:'codex',name:'Codex',updatedAt:'2026-11-06T15:55:00Z',windows:[win]};
+test('quota uses remaining, not pace delta',()=>{assert.equal(w.quota(win,now).left,68);assert.match(w.card(p,'burn',{},now),/68%/);assert.match(w.card(p,'history',{},now),/68%/)});
+test('unknown is distinct from zero',()=>{assert.equal(w.left({usedPercent:null}),null);assert.equal(w.left({usedPercent:100}),0);assert.equal(w.left({usedPercent:0}),100);assert.equal(w.left({usedPercent:-1}),null);assert.match(w.card(p,'burn',{},now),/Session.*No data/s)});
+test('history ends at measurement, does not extend to current time',()=>{const points=w.points(p,win,[],now);assert.equal(points.at(-1).t,Date.parse(p.updatedAt));assert.notEqual(points.at(-1).t,now)});
+test('provider freshness cannot be hidden by feed heartbeat',()=>assert.equal(w.status({...p,updatedAt:'2026-11-06T14:00:00Z'},{checkedAt:new Date(now).toISOString()},now).stale,true));
+test('expired and missing windows do not produce bogus charts',()=>{assert.deepEqual(w.points(p,{...win,resetsAt:'2026-11-05T16:00:00Z'},[],now),[]);assert.doesNotMatch(w.graph(p,{},[],now),/NaN|Infinity/)});
+test('reset identifiers exclude another reset window',()=>{const h=[{t:'2026-11-06T15:00:00Z',u:{codex:{secondary:20}},r:{codex:{secondary:'2026-11-12T10:40:42Z'}}}];assert.equal(w.points(p,win,h,now).length,1)});
+test('cost history escapes content and distinguishes missing from zero',()=>{assert.equal(w.money(null),'—');assert.equal(w.money(0),'$0.00');assert.match(w.costChart({daily:[]}),/unavailable/);assert.doesNotMatch(w.costChart({daily:[{date:'<script>',costUSD:3}]}),/<script>/)});

@@ -38,17 +38,19 @@
       <div id="wxBody"></div>
     </section>
 
-    <section class="tile usage" aria-label="Claude usage" data-provider="claude"></section>
-    <section class="tile usage" aria-label="Codex usage" data-provider="codex"></section>
-
-    <section class="tile burn wide" aria-label="Burn-down">
-      <div class="tile-head"><span>Burn-down</span><span class="muted small" id="feedAge" role="status"></span></div>
-      <div class="burn-row" id="burnRow"></div>
+    <section class="wide" aria-label="Quota burn-down">
+      <div class="tile-head"><span>Quota burn-down</span><button class="chip" id="refreshUsage" type="button">Refresh usage</button></div>
+      <div class="widget-grid" id="burnRow"></div>
+    </section>
+    <section class="wide" aria-label="Usage and daily history">
+      <div class="tile-head"><span>Usage & daily history</span><span class="small" id="feedAge" role="status"></span></div>
+      <div class="widget-grid" id="historyRow"></div>
     </section>
   </main>
 
   <p class="foot muted small">Usage comes from CodexBar on the Mac, refreshed about every 5 minutes while it is awake. Weather: Open-Meteo.</p>
 </div>
+<script src="usage-widgets.js"></script>
 <script src="dashboard.js"></script>
 </body>
 </html>

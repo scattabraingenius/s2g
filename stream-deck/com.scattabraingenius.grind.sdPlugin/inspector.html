@@ -1,0 +1,11 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{background:#17111F;color:#EDE7F6;font:13px system-ui;padding:12px}label{display:block;margin:14px 0 6px}select{width:100%;padding:6px;background:#221934;color:#EDE7F6;border:1px solid #372950}p{color:#A599BF;font-size:12px;line-height:1.5}</style></head><body>
+<label for="provider">Provider</label><select id="provider"><option value="claude">Cue · Claude</option><option value="codex">misc · Codex</option></select>
+<label for="window">Quota window</label><select id="window"><option value="primary">Session</option><option value="secondary">Weekly</option></select>
+<label for="view">Display style</label><select id="view"><option value="burn">Quota burn-down</option><option value="history">Usage & daily history</option></select>
+<p>Turn: change style. Tap: switch session/weekly. Press: refresh shared feed (10-second cooldown). History costs are API price estimates from local logs, not billed charges.</p>
+<script>
+let ws,context,settings={};const ids=['provider','window','view'];
+function apply(s){settings=s||{};for(const id of ids)if(settings[id])document.getElementById(id).value=settings[id];}
+function connectElgatoStreamDeckSocket(port,uuid,event,info,actionInfo){context=uuid;const a=JSON.parse(actionInfo);apply(a.payload.settings);ws=new WebSocket('ws://127.0.0.1:'+port);ws.onopen=()=>ws.send(JSON.stringify({event,uuid}));ws.onmessage=e=>{const m=JSON.parse(e.data);if(m.event==='didReceiveSettings')apply(m.payload.settings);};}
+for(const id of ids)document.getElementById(id).onchange=()=>{for(const key of ids)settings[key]=document.getElementById(key).value;if(ws?.readyState===1)ws.send(JSON.stringify({event:'setSettings',context,payload:settings}));};
+</script></body></html>

@@ -102,3 +102,30 @@ h1{margin:2px 0 0;font-size:28px;font-weight:700;letter-spacing:-.01em}
   .weather,.usage{grid-column:auto}
   .clock-time{font-size:48px}
 }
+
+
+/* Provider widgets: shared palette, two complementary views. */
+.widget-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.provider-widget{background:linear-gradient(145deg,var(--surface-2),var(--card) 70%);border:1px solid var(--line);border-radius:var(--radius);padding:20px;min-width:0}
+.widget-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.widget-head b{display:flex;align-items:center;gap:9px;font-size:18px}
+.widget-head i{width:10px;height:10px;border-radius:50%;background:var(--pc);box-shadow:0 0 12px color-mix(in srgb,var(--pc),transparent 55%)}
+.widget-head>span,.widget-status,.widget-note,.history-label{font-size:12px;color:var(--muted)}
+.widget-status{margin-top:8px}.warn{color:var(--star)}
+.quota-row{padding:15px 0;border-bottom:1px solid var(--line);min-width:0}
+.quota-row.with-chart{display:grid;grid-template-columns:1fr 1.2fr;gap:12px;align-items:center}
+.quota-label{font-size:12px;font-weight:650;color:var(--muted)}
+.quota-value{font-size:30px;font-weight:700;letter-spacing:-.035em;color:var(--pc);font-variant-numeric:tabular-nums;line-height:1.3}
+.quota-value small{font-size:12px;letter-spacing:0;font-weight:500;color:var(--muted)}
+.quota-reset,.quota-pace{font-size:12px;color:var(--muted);line-height:1.6}
+.quota-pace{color:var(--signal-dim)}
+.quota-row svg,.cost-chart svg{display:block;width:100%;height:auto;color:var(--pc)}
+.provider-widget .bar{height:7px;margin:10px 0 2px;overflow:hidden}
+.provider-widget .bar-fill{min-width:0}
+.widget-note{line-height:1.5;margin-top:12px;font-size:11px}
+.cost-summary{padding:12px 0;font-size:12px}
+.cost-summary>div{display:flex;justify-content:space-between;gap:8px;margin:5px 0}
+.cost-summary span,.cost-summary small{color:var(--muted);font-weight:400}
+.history-label{margin:4px 0 8px}
+.chip:focus-visible{outline:2px solid var(--signal-dim);outline-offset:3px}
+@media(max-width:650px){.widget-grid{grid-template-columns:minmax(0,1fr)}.provider-widget{padding:16px}.quota-row.with-chart{grid-template-columns:1fr 1fr}.widget-head>span{font-size:11px}}

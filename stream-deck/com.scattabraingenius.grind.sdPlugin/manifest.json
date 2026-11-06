@@ -1,0 +1,69 @@
+{
+  "$schema": "https://schemas.elgato.com/streamdeck/plugins/manifest.json",
+  "UUID": "com.scattabraingenius.grind",
+  "Name": "The Grind Usage",
+  "Author": "scattabraingenius",
+  "Description": "Codex and Claude quota burn-down and daily usage history in The Grind colors.",
+  "Version": "1.0.0.0",
+  "SDKVersion": 2,
+  "CodePath": "plugin.cjs",
+  "Nodejs": {
+    "Version": "24"
+  },
+  "Icon": "icon",
+  "Category": "The Grind Usage",
+  "CategoryIcon": "icon",
+  "Software": {
+    "MinimumVersion": "7.1"
+  },
+  "OS": [
+    {
+      "Platform": "mac",
+      "MinimumVersion": "13"
+    },
+    {
+      "Platform": "windows",
+      "MinimumVersion": "10"
+    }
+  ],
+  "Actions": [
+    {
+      "UUID": "com.scattabraingenius.grind.usage",
+      "Name": "Usage Panel",
+      "Icon": "icon",
+      "Tooltip": "Turn: style. Tap: quota window. Press: refresh.",
+      "Controllers": [
+        "Encoder"
+      ],
+      "Encoder": {
+        "layout": "layout.json",
+        "TriggerDescription": {
+          "Rotate": "Switch display style",
+          "Push": "Refresh usage feed",
+          "Touch": "Switch quota window"
+        }
+      },
+      "PropertyInspectorPath": "inspector.html",
+      "States": [
+        {
+          "Image": "icon"
+        }
+      ]
+    },
+    {
+      "UUID": "com.scattabraingenius.grind.dashboard",
+      "Name": "Open Dashboard",
+      "Icon": "icon",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "icon",
+          "Title": "The Grind",
+          "FontSize": 12
+        }
+      ]
+    }
+  ]
+}
