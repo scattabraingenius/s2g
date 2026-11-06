@@ -17,6 +17,9 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const prefs = (() => { try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; } catch { return {}; } })();
 const savePrefs = () => { try { localStorage.setItem(STORE_KEY, JSON.stringify(prefs)); } catch {} };
+// Default city, rather than a device location prompt, on a new browser or cleared storage.
+const DEFAULT_PLACE = {name:"Troy, MI", lat:42.606, lon:-83.150};
+const validPlace = p => p && typeof p.name === "string" && Number.isFinite(p.lat) && Number.isFinite(p.lon) && Math.abs(p.lat) <= 90 && Math.abs(p.lon) <= 180;
 
 /* ---------------- clock + calendar ---------------- */
 let calDay = "";
@@ -56,7 +59,9 @@ function weatherSetup(msg){
   $("wxBody").innerHTML = `<div class="wx-setup">${msg ? `<span>${esc(msg)}</span>` : ""}
     <button type="button" id="wxLocate">Use my location</button>
     <input id="wxCity" type="search" placeholder="or type a city" aria-label="City">
+    ${validPlace(prefs.place) ? '<button type="button" id="wxCancel">Cancel</button>' : ''}
   </div>`;
+  if($("wxCancel")) $("wxCancel").onclick = () => loadWeather();
   $("wxLocate").onclick = () => navigator.geolocation.getCurrentPosition(
     pos => { prefs.place = {name:"My location", lat:+pos.coords.latitude.toFixed(3), lon:+pos.coords.longitude.toFixed(3)}; savePrefs(); loadWeather(); },
     () => weatherSetup("Location was blocked."), {timeout:10000});
@@ -72,8 +77,8 @@ function weatherSetup(msg){
 }
 async function loadWeather(){
   $("wxUnits").textContent = units() === "c" ? "°C" : "°F";
+  if(!validPlace(prefs.place)){ prefs.place = {...DEFAULT_PLACE}; savePrefs(); }
   const p = prefs.place;
-  if(!p) return weatherSetup();
   try {
     const q = new URLSearchParams({latitude:p.lat, longitude:p.lon, timezone:"auto", forecast_days:"5",
       current:"temperature_2m,weather_code", daily:"weather_code,temperature_2m_max,temperature_2m_min",
@@ -81,7 +86,7 @@ async function loadWeather(){
     const w = await fetch("https://api.open-meteo.com/v1/forecast?" + q).then(r => { if(!r.ok) throw 0; return r.json(); });
     const now = wmo(w.current.weather_code), d = w.daily, r = Math.round;
     $("wxPlace").innerHTML = `${esc(p.name)} <button type="button" class="chip" id="wxChange" title="Change place">Change</button>`;
-    $("wxChange").onclick = () => { delete prefs.place; savePrefs(); weatherSetup(); };
+    $("wxChange").onclick = () => weatherSetup();
     $("wxBody").innerHTML = `<div class="wx-now"><div class="wx-temp">${r(w.current.temperature_2m)}°</div>
         <div class="wx-icon" aria-hidden="true">${now.icon}</div>
         <div><div class="wx-cond">${now.text}</div><div class="wx-hilo">H ${r(d.temperature_2m_max[0])}° · L ${r(d.temperature_2m_min[0])}°</div></div></div>
