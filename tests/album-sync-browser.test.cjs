@@ -80,7 +80,7 @@ const wait=async fn=>{for(let i=0;i<100;i++){if(await fn())return;await new Prom
     Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async()=>{}}});
    },{seed,user,denyRead});
    const page=await context.newPage();pages.push(page);page.on('pageerror',error=>errors.push(error.message));
-   await page.goto(BASE+'/album-board/',{waitUntil:'networkidle'});
+   await page.goto(BASE+'/lyrics/',{waitUntil:'networkidle'});
    return page;
   }
   const phone=await client({v:2,ratings:{'check-out_v01_Cue':{score:86,note:'Already rated on phone',at:100}},tracklist:['check-out'],pick:{},custom:{}},undefined,false,{width:390,height:844});

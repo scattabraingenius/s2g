@@ -9,7 +9,7 @@ const fs = require('node:fs'), path = require('node:path'), vm = require('node:v
 const BASE = process.env.APP_BASE_URL;
 const ROOT = path.resolve(__dirname, '..');
 const OUT = process.env.ARTIFACT_DIR || path.resolve(ROOT, '../album-status-verification');
-const ctx = {window:{}}; vm.runInNewContext(fs.readFileSync(path.join(ROOT, 'audio-board/tracks.js'), 'utf8'), ctx);
+const ctx = {window:{}}; vm.runInNewContext(fs.readFileSync(path.join(ROOT, 'audio/tracks.js'), 'utf8'), ctx);
 // Keep the named migration/replace scenario synthetic: live catalogue refreshes may
 // legitimately remove these takes after Jason moves them to Suno Trash.
 const example = ctx.window.ALBUM_SONGS.find(s => s.baseTitle === 'Two People to Mourn' && s.session === 'Vocals');
@@ -48,7 +48,7 @@ const pass = m => console.log('PASS ' + m);
     const context = await browser.newContext({viewport:{width:1440, height:1000}});
     const blocked = [];
     await context.route('**/*', r => { if (new URL(r.request().url()).origin === new URL(BASE).origin) return r.continue(); blocked.push(r.request().url()); return r.abort(); });
-    await context.route('**/audio-board/tracks.js', r => r.fulfill({contentType:'text/javascript', body:
+    await context.route('**/audio/tracks.js', r => r.fulfill({contentType:'text/javascript', body:
       'window.BOARD_KIND="audio";window.ALBUM_SONGS='+JSON.stringify(ctx.window.ALBUM_SONGS)+';window.ALBUM_SESSIONS='+JSON.stringify(ctx.window.ALBUM_SESSIONS)+';'}));
     await context.addInitScript(([plan, audio]) => { if (!localStorage.getItem('seeded')) { localStorage.setItem('grind.planner.v1', plan); localStorage.setItem('grind.audio.v1', audio); localStorage.setItem('seeded', '1'); } }, [JSON.stringify(planSeed), JSON.stringify(audioSeed)]);
     const page = await context.newPage();
@@ -65,7 +65,7 @@ const pass = m => console.log('PASS ' + m);
     const toastText = () => page.textContent('#toastText');
     const settle = () => page.waitForTimeout(450);
 
-    await page.goto(BASE + '/audio-board/album/?view=consider');
+    await page.goto(BASE + '/audio/album/?view=consider');
     await page.selectOption('#typeFilter', 'all');   // counts below cover every recording type
     await page.waitForSelector('#bucketTabs [data-bucket-tab]');
 

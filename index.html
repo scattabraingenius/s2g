@@ -793,7 +793,7 @@
 <body>
 <!-- SHARED APP BAR (2026-09-11) — the same component as MM..HOME's bar: SB2G button, large live
      clock with the date beside it, room for future icons, then Home / Calendar / Agenda / Time /
-     Life Admin. The destinations other than Time open the embedded MM..HOME at ./mm-home/. -->
+     Life Admin. The destinations other than Time open the embedded MM..HOME at ./mm/. -->
 <header class="appbar" id="appBar">
   <div class="ab-inner" id="appBarInner">
     <a class="ab-sb2g" id="sb2gLink" href="./" aria-label="SB2G" aria-current="page"><img src="./icon-192.png" alt=""><span class="ab-sb2g-label">SB2G</span></a>
@@ -4771,7 +4771,7 @@ function tick(){ paintAppBarClock(new Date());
    The dashboard and Time (The Grind) share this page, and #time selects Time, so MM..HOME's Time
    button can open it directly. Taps inside the page use replaceState, the same rule as MM..HOME's
    router: moving around the bar must not stack up back-button history. */
-const NAV_ICON_BASE="./icons/nav/", MM_HOME_URL="./mm-home/";
+const NAV_ICON_BASE="./icons/nav/", MM_HOME_URL="./mm/";
 let sbView="home", appNavSignature="";
 function renderAppNav(){
   const nav=document.getElementById("appNav"); if(!nav) return;
@@ -4779,9 +4779,9 @@ function renderAppNav(){
   const dot=ogActive ? (ogDecisionDue() ? {cls:"due", title:"The Grind: time reached"} : {cls:"", title:"The Grind is tracking"}) : null;
   const items=[fp("home","Home","home",""), fp("calendar","Calendar","calendar","#calendar"), fp("agenda","Agenda","agenda","#agenda"),
                {id:"time", label:"Time", icon:"time", href:"#time", current:sbView==="time", dot},
-               {id:"album", label:"Lyrics", icon:"agenda", href:"./album-board/"},
-               {id:"audio", label:"Audio", icon:"time", href:"./audio-board/"},
-               {id:"dash", label:"Dash", icon:"home", href:"./dashboard/"}];
+               {id:"album", label:"Lyrics", icon:"agenda", href:"./lyrics/"},
+               {id:"audio", label:"Audio", icon:"time", href:"./audio/"},
+               {id:"dash", label:"Dash", icon:"home", href:"./dash/"}];
   const group={label:"Life", items:[fp("ehah","EHAH","ehah","#ehah"), fp("clothing","Clothing","clothing","#clothing"),
                fp("funds","Chores","chores","#funds"), fp("bank","Bank","bank","#bank")]};
   const sig=JSON.stringify([items,group]);

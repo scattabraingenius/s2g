@@ -1,6 +1,6 @@
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const ROOT=path.resolve(__dirname,'..'),BASE=process.env.APP_BASE_URL||'http://127.0.0.1:8765',data={window:{}};
-vm.runInNewContext(fs.readFileSync(path.join(ROOT,'album-board/songs.js'),'utf8'),data);
+vm.runInNewContext(fs.readFileSync(path.join(ROOT,'lyrics/songs.js'),'utf8'),data);
 const songs=JSON.parse(JSON.stringify(data.window.ALBUM_SONGS)),A='Oct 8 Reset',B='Oct 9 Lyric Mine',C='Oct 10 Cue Battle 01';
 const expected=names=>songs.flatMap(s=>s.versions.filter(v=>names.includes(v.session)).map(v=>v.stem)).sort();
 const rowOrder=(names,down)=>songs.map(s=>({s,versions:s.versions.filter(v=>names.includes(v.session))})).filter(x=>x.versions.length).sort((a,b)=>{const x=a.versions.map(v=>v.folder.match(/^\d{4}-\d{2}(?:-\d{2})?/)[0]).sort().at(-1),y=b.versions.map(v=>v.folder.match(/^\d{4}-\d{2}(?:-\d{2})?/)[0]).sort().at(-1);return(down?y.localeCompare(x):x.localeCompare(y))||a.s.title.localeCompare(b.s.title,undefined,{numeric:true});}).map(x=>x.s.slug);
@@ -8,7 +8,7 @@ const rowOrder=(names,down)=>songs.map(s=>({s,versions:s.versions.filter(v=>name
  const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe'});
  try {for(const width of [390,1440]){
   const ctx=await browser.newContext({viewport:{width,height:900}});await ctx.route('**/*',r=>new URL(r.request().url()).origin===new URL(BASE).origin?r.continue():r.abort());
-  const page=await ctx.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto(BASE+'/album-board/',{waitUntil:'networkidle'});
+  const page=await ctx.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto(BASE+'/lyrics/',{waitUntil:'networkidle'});
   const seed={v:2,ratings:{'some-existing-id':{score:78,note:'Keep me'}},tracklist:[],custom:{},collections:{test:{name:'My batch',created:1,members:expected([B]).slice(0,3)}},pick:{}};
   await page.evaluate(seed=>localStorage.setItem('grind.album.v1',JSON.stringify(seed)),seed);await page.reload({waitUntil:'networkidle'});
   const original=await page.evaluate(()=>localStorage.getItem('grind.album.v1'));

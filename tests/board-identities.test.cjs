@@ -7,7 +7,7 @@ const BASE=process.env.APP_BASE_URL;
   const context=await browser.newContext();
   await context.route('**/*',route=>new URL(route.request().url()).origin===new URL(BASE).origin?route.continue():route.abort());
   const page=await context.newPage(),ids=[];
-  const cases=[['/','/'],['/album-board/','/the-grind/album-board/'],['/audio-board/','/the-grind/audio-board/']];
+  const cases=[['/','/'],['/lyrics/','/s2g/lyrics/'],['/audio/','/s2g/audio/']];
   for(const [pagePath,expectedId] of cases){
    await page.goto(BASE+pagePath,{waitUntil:'networkidle'});
    const cdp=await context.newCDPSession(page),app=await cdp.send('Page.getAppManifest');

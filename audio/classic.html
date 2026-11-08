@@ -9,7 +9,7 @@
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="apple-touch-icon" sizes="180x180" href="./icons/audio-cassette-180.png">
 <meta name="application-name" content="Audio Board">
-<link rel="stylesheet" href="../album-board/board.css">
+<link rel="stylesheet" href="../lyrics/board.css">
 </head>
 <body>
 <div class="wrap">
@@ -30,7 +30,7 @@
     <button class="btn small" id="retrySyncBtn" hidden>Retry sync</button>
   </div>
 
-  <nav class="board-switch" aria-label="Boards"><a class="btn small" href="../album-board/">Lyric Board</a><a class="btn small" href="./album/?scope=all">Audio Board</a><a class="btn small primary" href="./classic.html" aria-current="page">Classic view</a></nav>
+  <nav class="board-switch" aria-label="Boards"><a class="btn small" href="../lyrics/">Lyric Board</a><a class="btn small" href="./album/?scope=all">Audio Board</a><a class="btn small primary" href="./classic.html" aria-current="page">Classic view</a></nav>
   <div class="tabs" role="tablist">
     <button class="tab" role="tab" id="tabSongs" aria-selected="true">Takes</button>
     <button class="tab" role="tab" id="tabAlbum" aria-selected="false">Tracklist <span id="albumCount"></span></button>
@@ -86,10 +86,10 @@
 </dialog>
 
 <script src="tracks.js"></script>
-<script src="../album-board/sync.js"></script>
+<script src="../lyrics/sync.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-<script src="../album-board/board.js"></script>
+<script src="../lyrics/board.js"></script>
 </body>
 </html>

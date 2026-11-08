@@ -3,7 +3,7 @@ const assert=require('node:assert/strict');
 const fs=require('fs'),path=require('path'),vm=require('vm');
 const BASE=process.env.APP_BASE_URL,ROOT=path.join(__dirname,'..');
 const checked=message=>console.log('PASS '+message);
-const ctx={window:{}};vm.runInNewContext(fs.readFileSync(path.join(ROOT,'audio-board/tracks.js'),'utf8'),ctx);
+const ctx={window:{}};vm.runInNewContext(fs.readFileSync(path.join(ROOT,'audio/tracks.js'),'utf8'),ctx);
 const hasWords=t=>/[\p{L}\p{N}]/u.test(String(t||'').replace(/\[[^\]]*\]|\([^)]*\)/g,' ')),kind=s=>{const v=s.versions[0];return v.type==='Vocal'&&!hasWords(v.suno?.lyrics??v.lyrics)?'Instrumental':v.type;};
 const SONGS=ctx.window.ALBUM_SONGS,vocals=SONGS.filter(s=>kind(s)==='Vocal');
 const withLyrics=vocals.find(s=>s.versions[0].lyrics);
@@ -18,7 +18,7 @@ const withLyrics=vocals.find(s=>s.versions[0].lyrics);
     page.on('pageerror',error=>errors.push(error.message));
     page.on('dialog',d=>d.type()==='prompt'?d.accept('Planner nickname'):d.accept());
 
-    await page.goto(BASE+'/audio-board/?view=consider',{waitUntil:'networkidle'});
+    await page.goto(BASE+'/audio/?view=consider',{waitUntil:'networkidle'});
     assert.match(page.url(),/\/audio-board\/album\/\?/);
     assert.equal(await page.locator('#considerList .card').count(),vocals.length);
     checked('Audio Board opens the planner; Album picks starts with every considered vocal take as Unreviewed');
@@ -58,13 +58,13 @@ const withLyrics=vocals.find(s=>s.versions[0].lyrics);
     checked('Rename and Delete work on a take; delete-tagged takes leave the buckets and appear in Suno cleanup');
 
     // One-take and lyric-source links.
-    await page.goto(BASE+'/audio-board/classic.html?take='+vocals[0].slug,{waitUntil:'networkidle'});
-    await page.goto(BASE+'/audio-board/?take='+vocals[0].slug,{waitUntil:'networkidle'});
+    await page.goto(BASE+'/audio/classic.html?take='+vocals[0].slug,{waitUntil:'networkidle'});
+    await page.goto(BASE+'/audio/?take='+vocals[0].slug,{waitUntil:'networkidle'});
     assert.equal(await page.locator('#considerList .card').count(),1);
     await page.click('#clearOnly');
     assert(await page.locator('#considerList .card').count()>100);
     const matched=vocals.find(s=>s.versions[0].lyricStem);
-    await page.goto(BASE+'/audio-board/?lyrics='+encodeURIComponent(matched.versions[0].lyricStem),{waitUntil:'networkidle'});
+    await page.goto(BASE+'/audio/?lyrics='+encodeURIComponent(matched.versions[0].lyricStem),{waitUntil:'networkidle'});
     const n=await page.locator('#considerList .card').count();
     assert(n>=1&&n<vocals.length);
     checked('Links from Lyric Board and old Audio Board URLs open just the right takes');

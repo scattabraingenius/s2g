@@ -20,16 +20,16 @@ plan.considered.done = {added:1, del:true, delDone:1};
 plan.considered['short-delete'].del = true;
 const audio = {v:2, ratings:{'audio-cut':{status:'cut'}, both:{status:'cut'}, short:{status:'short'}, 'short-delete':{status:'short'}}, tracklist:[], pick:{}, custom:{}, collections:{}};
 const storage = new Map([['grind.planner.v1', JSON.stringify(plan)], ['grind.audio.v1', JSON.stringify(audio)]]);
-const location = {href:'http://localhost/audio-board/album/', pathname:'/audio-board/album/', search:'', origin:'http://localhost'};
+const location = {href:'http://localhost/audio/album/', pathname:'/audio/album/', search:'', origin:'http://localhost'};
 const history = {state:null, entries:[], replaceState(state){this.state=state;}, pushState(state, _, url){this.state=state;this.entries.push(state);const u=new URL(url);location.href=u.href;location.search=u.search;}};
 const context = vm.createContext({console, URL, URLSearchParams, crypto:require('node:crypto').webcrypto,
   navigator:{}, location, history, innerWidth:1200, CSS:{escape:s=>s}, matchMedia:()=>({matches:true}),
   localStorage:{getItem:key=>storage.get(key) || null, setItem:(key,value)=>storage.set(key,value)},
   document:{activeElement:null, body:{classList:{toggle(){}}}, createElement:tag=>element('new-'+tag), getElementById:element, querySelector:element, querySelectorAll:()=>[], addEventListener(){}},
   window:{ALBUM_SONGS:stems.map(s=>({slug:s,title:s,versions:[{title:s,baseTitle:s,writer:'Cue',duration:120}]})), addEventListener:(name, callback)=>{listeners[name]=callback;}},
-  ReviewTools:require('../album-board/review-tools.js'), PlannerSync:require('../audio-board/album/planner-sync.js'), PlannerStatus:require('../audio-board/album/planner-status.js'), AlbumSync:require('../album-board/sync.js'),
+  ReviewTools:require('../lyrics/review-tools.js'), PlannerSync:require('../audio/album/planner-sync.js'), PlannerStatus:require('../audio/album/planner-status.js'), AlbumSync:require('../lyrics/sync.js'),
   setTimeout:()=>0, clearTimeout(){}, confirm:()=>true});
-vm.runInContext(fs.readFileSync(path.join(root,'audio-board/album/planner.js'),'utf8'),context);
+vm.runInContext(fs.readFileSync(path.join(root,'audio/album/planner.js'),'utf8'),context);
 const run = code => vm.runInContext(code,context);
 // The old flags were converted on load: each take has one status for the album.
 assert.equal(run('live().filter(eligible).length'), 2);
@@ -57,7 +57,7 @@ run('undo()');
 assert.equal(run('statusOf("audio-cut")'),'cut');
 const html = run('card("active")');
 assert.match(html,/target="_blank"/); // Suno remains an external destination.
-assert.doesNotMatch(html,/href="[^"]*(?:album-board|take=)[^"]*" target="_blank"/);
+assert.doesNotMatch(html,/href="[^"]*(?:lyrics\/|take=)[^"]*" target="_blank"/);
 assert.match(html,/returnTo=/);
 assert(html.indexOf('class="status-seg"') < html.indexOf('class="media-row"'));
 assert.doesNotMatch(html,/class="decision"/);
@@ -66,7 +66,7 @@ assert(history.entries.length >= 1);
 listeners.popstate({state:{plannerNavigation:{view:'consider',session:'',album:'debut'}}});
 assert.equal(run('ui.view'),'consider');
 assert.equal(run('ui.session'),'');
-for (const board of ['album-board','audio-board']) {
+for (const board of ['lyrics','audio']) {
   const manifest=JSON.parse(fs.readFileSync(path.join(root,board,'manifest.webmanifest')));
   assert.equal(manifest.scope,'../');
 }

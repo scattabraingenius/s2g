@@ -2,7 +2,7 @@
 const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
 const {render}=require('./render.cjs');
 const FEED='https://gist.githubusercontent.com/scattabraingenius/994158e57243b2b3faa16adc029f0e0d/raw/usage.json';
-const DASHBOARD='https://scattabraingenius.github.io/the-grind/dashboard/';
+const DASHBOARD='https://scattabraingenius.github.io/s2g/dash/';
 const cache=path.join(os.homedir(),'.grind-streamdeck','usage.json');
 let feed=null,failed=false,pending=null,lastRequest=0;const actions=new Map();
 try{feed=JSON.parse(fs.readFileSync(cache,'utf8'));}catch{}

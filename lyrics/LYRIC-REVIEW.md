@@ -18,7 +18,7 @@ Quick statuses, tags, notes, custom writing sessions and the existing lyric trac
 
 Run from the repository using Python 3:
 
-    python -B album-board/build_songs.py --studio --manifest test-artifacts/studio-import.json
+    python -B lyrics/build_songs.py --studio --manifest test-artifacts/studio-import.json
 
 Pass an explicit Studio root as the positional argument if this checkout is outside the synced folder layout. The importer retains existing version IDs and original content, imports dated writing packets including edited filename variants, library lyrics, anchors, headed lyric-book songs, explicitly named reference lyric files, and Suno lyric exports. It reads no message archives or seed briefs. Identical copies add source locations; distinct writing or generation prompts remain versions. Existing catalogue entries remain when a source is unavailable. Source locations do not establish artistic approval. An available writing folder and song folder are both required.
 

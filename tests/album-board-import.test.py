@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-spec = importlib.util.spec_from_file_location("builder", Path(__file__).resolve().parents[1] / "album-board" / "build_songs.py")
+spec = importlib.util.spec_from_file_location("builder", Path(__file__).resolve().parents[1] / "lyrics" / "build_songs.py")
 builder = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(builder)
 

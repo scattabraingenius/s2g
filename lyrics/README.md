@@ -6,21 +6,21 @@ Built by Cue (Claude), October 9, 2026.
 
 ## Open it
 
-Serve The Grind as usual and go to `/album-board/`. For example, from `ScattaBrain to Genius`:
+Serve The Grind as usual and go to `/lyrics/`. For example, from `ScattaBrain to Genius`:
 
     python3 -m http.server 8765 --bind 127.0.0.1
 
-then open http://127.0.0.1:8765/album-board/
+then open http://127.0.0.1:8765/lyrics/
 
 ## Update the songs
 
 The song list is a generated file, `songs.js`. After new songs land in SBGLP, run:
 
-    python3 album-board/build_songs.py
+    python3 lyrics/build_songs.py
 
 It discovers every dated session folder in `SBGLP/02 Album Project/Writing Sessions`. Pass that folder explicitly when working from another checkout:
 
-    python album-board/build_songs.py "D:\SYNCt\SBGLP\02 Album Project\Writing Sessions"
+    python lyrics/build_songs.py "D:\SYNCt\SBGLP\02 Album Project\Writing Sessions"
 
 Future dated sessions and their filter chips are discovered automatically. Song packets use `<slug>_v<version>_<writer>_lyrics.md`; accompanying Suno fields are read from `Suno Pass`. Missing prompts are shown as missing, rather than invented from the notes. `cg` is displayed as Misc; source filenames stay unchanged. Instrumental-style prompts are included when provided. Newest sessions appear first.
 
@@ -84,13 +84,13 @@ Future rebuilds automatically use this snapshot. To refresh it, replace it with 
 
 ## Install Lyric Board in Chrome
 
-Open the published `/album-board/` URL in a normal Chrome window and use the address-bar install icon or the **Install Lyric Board** button when Chrome offers it. It installs separately from The Grind and launches directly into Lyric Board in a standalone window. The board registers the shared service worker itself, so visiting The Grind first is not required. Its manifest and offline page are precached; existing song ratings and account sync continue to use the same origin and storage.
+Open the published `/lyrics/` URL in a normal Chrome window and use the address-bar install icon or the **Install Lyric Board** button when Chrome offers it. It installs separately from The Grind and launches directly into Lyric Board in a standalone window. The board registers the shared service worker itself, so visiting The Grind first is not required. Its manifest and offline page are precached; existing song ratings and account sync continue to use the same origin and storage.
 
 ## Lyric and Audio Boards
 
-Lyric Board remains at `/album-board/` so existing shortcuts, the app identity, rating IDs, copied versions, custom sessions and cloud records stay intact. Its labels and install name now read Lyric Board. The shared `board.js`, `board.css` and `sync.js` power both boards.
+Lyric Board remains at `/lyrics/` so existing shortcuts, the app identity, rating IDs, copied versions, custom sessions and cloud records stay intact. Its labels and install name now read Lyric Board. The shared `board.js`, `board.css` and `sync.js` power both boards.
 
-Audio Board lives at `/audio-board/` and stores decisions by Suno clip UUID. It has its own local key `grind.audio.v1`, score exports marked `audio-board`, and cloud path `planners/the-grind-scattabrain-2026/album/audio/accounts/<UID>`. Lyric cloud data remains at `album/accounts/<UID>` with the same `grind.album.v1` key and legacy `album-board` import format. Neither board imports the other board’s export. Both use the existing Google account authentication.
+Audio Board lives at `/audio/` and stores decisions by Suno clip UUID. It has its own local key `grind.audio.v1`, score exports marked `audio-board`, and cloud path `planners/the-grind-scattabrain-2026/album/audio/accounts/<UID>`. Lyric cloud data remains at `album/accounts/<UID>` with the same `grind.album.v1` key and legacy `album-board` import format. Neither board imports the other board’s export. Both use the existing Google account authentication.
 
 The source link is exact: the original SBGLP path is retained, and a promoted copy can link back to one imported session packet only when full lyric text, writer and version agree. Ambiguous packets are not guessed. Audio Board links back to that exact lyric version; Lyric Board’s small `audio-links.js` index lets a packet open its associated takes without loading the full audio catalogue. Scores are not copied between boards.
 
@@ -102,4 +102,4 @@ Lyric Board now uses the neon notebook and pen icon (`icons/lyric-notebook-*.png
 
 ## Installation identity fix
 
-The previous `id: "./"` resolved against the site origin, making both boards collide. The fixed IDs are `/the-grind/album-board/` and `/the-grind/audio-board/`. Start URLs, scopes, browser storage and cloud score paths are unchanged. A previously installed board with the shared origin-root identity may need to be removed and installed again from the correct board URL. Tests now verify Chrome’s processed identities as well as origin-based ID resolution.
+The previous `id: "./"` resolved against the site origin, making both boards collide. The fixed IDs are `/s2g/lyrics/` and `/s2g/audio/`. Start URLs, scopes, browser storage and cloud score paths are unchanged. A previously installed board with the shared origin-root identity may need to be removed and installed again from the correct board URL. Tests now verify Chrome’s processed identities as well as origin-based ID resolution.

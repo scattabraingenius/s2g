@@ -3,7 +3,7 @@ const assert=require('node:assert/strict');
 const fs=require('fs'),path=require('path'),vm=require('vm');
 const BASE=process.env.APP_BASE_URL,ROOT=path.join(__dirname,'..');
 const checked=message=>console.log('PASS '+message);
-const ctx={window:{}};vm.runInNewContext(fs.readFileSync(path.join(ROOT,'audio-board/tracks.js'),'utf8'),ctx);
+const ctx={window:{}};vm.runInNewContext(fs.readFileSync(path.join(ROOT,'audio/tracks.js'),'utf8'),ctx);
 const hasWords=t=>/[\p{L}\p{N}]/u.test(String(t||'').replace(/\[[^\]]*\]|\([^)]*\)/g,' ')),kind=s=>{const v=s.versions[0];return v.type==='Vocal'&&!hasWords(v.suno?.lyrics??v.lyrics)?'Instrumental':v.type;};
 const SONGS=ctx.window.ALBUM_SONGS,count=type=>SONGS.filter(s=>kind(s)===type).length;
 (async()=>{
@@ -15,7 +15,7 @@ const SONGS=ctx.window.ALBUM_SONGS,count=type=>SONGS.filter(s=>kind(s)===type).l
     page.on('pageerror',error=>errors.push(error.message));
     const plan=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('grind.planner.v1')));
     const cards=page.locator('#sortList .card'),chip=k=>page.locator(`[data-sf="${k}"]`);
-    await page.goto(BASE+'/audio-board/',{waitUntil:'networkidle'});
+    await page.goto(BASE+'/audio/',{waitUntil:'networkidle'});
     assert.match(page.url(),/view=sort/);
     assert.equal(await page.locator('#viewSort').isVisible(),true);
     assert.equal(await cards.count(),count('Vocal'),'Sort shows vocals only by default');

@@ -14,4 +14,4 @@ The collector at `scripts/usage-feed/push_usage.py` exports aggregate daily cost
 
 Validation: official Elgato CLI pack/schema checks, shared renderer unit tests and mocked Stream Deck protocol/control tests. Physical Stream Deck display and installation still require hardware verification.
 
-Repackage after source edits: copy `dashboard/usage-widgets.js` to the plugin folder, then run `npm exec --yes --package=@elgato/cli -- streamdeck pack ./com.scattabraingenius.grind.sdPlugin --output ./dist --force` from this directory.
+Repackage after source edits: copy `dash/usage-widgets.js` to the plugin folder, then run `npm exec --yes --package=@elgato/cli -- streamdeck pack ./com.scattabraingenius.grind.sdPlugin --output ./dist --force` from this directory.

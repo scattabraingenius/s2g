@@ -142,7 +142,7 @@ function labelOf(stem) { const t = take(stem); return !item(stem).name && t.titl
 const dur = s => { s = Math.round(s || 0); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
 const longDur = s => { s = Math.round(s); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60); return (h ? h + "h " : "") + m + "m " + String(s % 60).padStart(2, "0") + "s"; };
 const lyricSearch = title => String(title || "").replace(/^[A-Z]-\s+/, "").replace(/(\s+(v\d+|\d+|misc|-\s*\w+))+$/i, "").trim();
-const lyricHref = stem => { const t = take(stem); return t.lyricSlug && t.lyricStem ? `../../album-board/?song=${encodeURIComponent(t.lyricSlug)}&version=${encodeURIComponent(t.lyricStem)}` : `../../album-board/?q=${encodeURIComponent(lyricSearch(t.baseTitle))}`; };
+const lyricHref = stem => { const t = take(stem); return t.lyricSlug && t.lyricStem ? `../../lyrics/?song=${encodeURIComponent(t.lyricSlug)}&version=${encodeURIComponent(t.lyricStem)}` : `../../lyrics/?q=${encodeURIComponent(lyricSearch(t.baseTitle))}`; };
 const suno = stem => "https://suno.com/song/" + encodeURIComponent(stem);
 // Desktop: every Play opens in one reused "player" tab, so the previous take stops when the next one loads.
 // The tab is not opened "noopener" on purpose: a browser can only find a named tab it is still linked to.

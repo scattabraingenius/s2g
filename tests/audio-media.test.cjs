@@ -2,7 +2,7 @@ const {chromium}=require('playwright');
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const BASE=process.env.APP_BASE_URL,ROOT=path.resolve(__dirname,'..');
-const original=fs.readFileSync(path.join(ROOT,'audio-board/tracks.js'),'utf8');
+const original=fs.readFileSync(path.join(ROOT,'audio/tracks.js'),'utf8');
 const data={window:{}};vm.runInNewContext(original,data);
 assert(data.window.ALBUM_SONGS.every(s=>s.versions[0].audioUrl===null),'Current encoded Suno streams must not become broken players');
 const song=data.window.ALBUM_SONGS.find(s=>s.title==='Dearly Beloved.C2.1');
@@ -16,10 +16,10 @@ const wav=Buffer.alloc(44+16000*2*10);wav.write('RIFF');wav.writeUInt32LE(wav.le
   await context.route('**/*',route=>{
    const url=route.request().url();
    if(url===audioURL)return route.fulfill({contentType:'audio/wav',body:wav});
-   if(url.endsWith('/audio-board/tracks.js'))return route.fulfill({contentType:'application/javascript',body:catalogue});
+   if(url.endsWith('/audio/tracks.js'))return route.fulfill({contentType:'application/javascript',body:catalogue});
    return new URL(url).origin===new URL(BASE).origin?route.continue():route.abort();
   });
-  const page=await context.newPage();await page.goto(BASE+'/audio-board/classic.html',{waitUntil:'networkidle'});
+  const page=await context.newPage();await page.goto(BASE+'/audio/classic.html',{waitUntil:'networkidle'});
   await page.locator(`.row[data-slug="${song.slug}"]`).click();
   await page.locator('audio').evaluate(async audio=>{window.__player=audio;await audio.play();});
   await page.waitForTimeout(200);

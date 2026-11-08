@@ -65,11 +65,11 @@ Example read commands (placeholders are intentional; these are not a complete ex
 
 Read `CODEX_HANDOFF.md`, `CLAUDE_HANDOFF.md`, and the current builders before running an import.
 
-- Audio Board and Album Planner share `audio-board/tracks.js`; rebuild it once to refresh their available library.
-- Lyric Board uses written song/version packets in `album-board/songs.js`. A new Suno recording is not automatically a new written song. Rebuild from the complete approved Writing Sessions source and preserve existing slugs/version stems; do not invent lyric versions from titles alone.
-- `album-board/build_songs.py` accepts `--suno-titles` for verified clip links. `audio-board/build_tracks.py` accepts `--library`, `--matches`, and `--lyrics-catalogue`.
+- Audio Board and Album Planner share `audio/tracks.js`; rebuild it once to refresh their available library.
+- Lyric Board uses written song/version packets in `lyrics/songs.js`. A new Suno recording is not automatically a new written song. Rebuild from the complete approved Writing Sessions source and preserve existing slugs/version stems; do not invent lyric versions from titles alone.
+- `lyrics/build_songs.py` accepts `--suno-titles` for verified clip links. `audio/build_tracks.py` accepts `--library`, `--matches`, and `--lyrics-catalogue`.
 - Existing match results must be retained and extended with evidence. Never omit the match input merely to make a refresh run: that would discard existing lyric source links. Use exact source/version/full-text evidence; leave ambiguity unconfirmed.
-- Generate `audio-board/tracks.js`, `album-board/songs.js`, and `album-board/audio-links.js` through their builders, never hand edits. Compare old/new UUIDs, lyric IDs, voice attribution, and match counts before accepting output. Do not rebuild from missing/incomplete source inputs.
+- Generate `audio/tracks.js`, `lyrics/songs.js`, and `lyrics/audio-links.js` through their builders, never hand edits. Compare old/new UUIDs, lyric IDs, voice attribution, and match counts before accepting output. Do not rebuild from missing/incomplete source inputs.
 - Keep `grind.album.v1`, `grind.audio.v1`, `grind.planner.v1`, view/account keys, Firebase merge logic, and rules intact. A catalogue refresh does not authorize editing the user's cloud records or clearing browser data.
 - After changes under either board, run `python -B scripts\refresh-board-cache.py`; include the new cache name in the local commit. Add new client scripts to `APP_SHELL` in `service-worker.js`. A documentation file or test is not a client script.
 - Run relevant import tests and planner tests, then browser regressions with isolated data and screenshots confined to this repo (`ARTIFACT_DIR`). State exactly what ran. Synthetic tests do not establish real Firebase sync, phone-to-PC behavior, Suno playback, or real-data migration.
