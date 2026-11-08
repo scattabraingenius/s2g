@@ -56,7 +56,9 @@ async function assertNoHorizontalOverflow(page, label) {
     await assertNoHorizontalOverflow(page, "ScattaBrain phone view");
     await page.screenshot({ path: path.join(artifacts, "unified-phone-scattabrain.png"), fullPage: false });
 
-    await page.locator('#appNav a[data-page="time"]').click();
+    assert(await page.locator('#appNav a[data-page="time"]').count()===0,"Time button should be gone from the menu");
+    await page.evaluate(()=>{location.hash="#time";});
+    await page.locator("#timeView").waitFor({state:"visible"});
     assert((await page.url()).endsWith("/#time") && await page.locator("#timeView").isVisible(), "SB2G Time view did not open");
     assert(await page.locator(".og-eyebrow").textContent() === "The Grind", "The Grind label is wrong");
 

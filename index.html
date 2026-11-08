@@ -4778,7 +4778,6 @@ function renderAppNav(){
   const fp=(id,label,icon,hash)=>({id, label, icon, href:MM_HOME_URL+hash});
   const dot=ogActive ? (ogDecisionDue() ? {cls:"due", title:"The Grind: time reached"} : {cls:"", title:"The Grind is tracking"}) : null;
   const items=[fp("home","Home","home",""), fp("calendar","Calendar","calendar","#calendar"), fp("agenda","Agenda","agenda","#agenda"),
-               {id:"time", label:"Time", icon:"time", href:"#time", current:sbView==="time", dot},
                {id:"album", label:"Lyrics", icon:"agenda", href:"./lyrics/"},
                {id:"audio", label:"Audio", icon:"time", href:"./audio/"},
                {id:"dash", label:"Dash", icon:"home", href:"./dash/"}];

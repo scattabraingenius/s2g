@@ -3639,7 +3639,6 @@ function renderAppNav(){
   const nav=document.getElementById("appNav"); if(!nav) return;
   const item=id=>{ const p=pageDef(id); return {id:p.id, label:esc(p.label), icon:p.icon, href:p.hash||"./", current:currentPage===p.id, badge:p.badge?p.badge():0}; };
   const items=["home","calendar","agenda"].map(item);
-  if(SB2G_URL) items.push({id:"time", label:"Time", icon:"time", href:SB2G_URL+"#time"});
   if(SB2G_URL) items.push({id:"album", label:"Lyrics", icon:"agenda", href:SB2G_URL+"lyrics/"});
   if(SB2G_URL) items.push({id:"audio", label:"Audio", icon:"time", href:SB2G_URL+"audio/"});
   const group={label:"Life", items:LIFE_ADMIN_PAGES.map(item)};
