@@ -5,11 +5,11 @@
 const {chromium} = require('playwright');
 const assert = require('node:assert/strict');
 const fs = require('node:fs'), path = require('node:path'), vm = require('node:vm');
-const Sync = require('../audio-board/album/planner-sync.js');
+const Sync = require('../audio/album/planner-sync.js');
 const BASE = process.env.APP_BASE_URL;
 const ROOT = path.resolve(__dirname, '..');
 const OUT = process.env.ARTIFACT_DIR || path.resolve(ROOT, '../album-planner-verification');
-const ctx = {window:{}}; vm.runInNewContext(fs.readFileSync(path.join(ROOT, 'audio-board/tracks.js'), 'utf8'), ctx);
+const ctx = {window:{}}; vm.runInNewContext(fs.readFileSync(path.join(ROOT, 'audio/tracks.js'), 'utf8'), ctx);
 const vocals = ctx.window.ALBUM_SONGS.filter(s => s.session === 'Vocals');
 const pick = vocals.slice(0, 110).map(s => s.slug);
 const ratings = Object.fromEntries(pick.slice(0, 40).map((s, i) => [s, {score:40 + (i * 7) % 60, at:1}]));
@@ -40,7 +40,7 @@ const pass = m => console.log('PASS ' + m);
     page.on('dialog', d => d.type() === 'prompt' ? d.accept(promptAnswer) : d.accept());
 
     // Audio Board sort direction.
-    await page.goto(BASE + '/audio-board/classic.html');
+    await page.goto(BASE + '/audio/classic.html');
     await page.selectOption('#sort', 'title');
     const firstAsc = await page.locator('#list .row b').first().textContent();
     await page.click('#sortDir');
@@ -49,7 +49,7 @@ const pass = m => console.log('PASS ' + m);
     pass('Audio Board ascending/descending toggle persists');
 
     // Import 110.
-    await page.goto(BASE + '/audio-board/album/');
+    await page.goto(BASE + '/audio/album/');
     await page.click('#importOpen'); await page.click('[data-import="c:cand"]'); await page.click('#importClose');
     await page.selectOption('#typeFilter', 'all');
     assert.equal(await page.locator('#considerList .card').count(), 110);
@@ -74,13 +74,13 @@ const pass = m => console.log('PASS ' + m);
     assert.equal(await page.locator(`.card[data-stem="${stem0}"] [data-status="short"]`).getAttribute('aria-pressed'), 'true');
     await c0.locator('textarea.note').fill('Hook needs a harder landing');
     await c0.locator('textarea.note').blur();
-    await page.goto(BASE + '/audio-board/classic.html?take=' + stem0);
+    await page.goto(BASE + '/audio/classic.html?take=' + stem0);
     const detail = await page.textContent('#detail');
     assert.equal(await page.inputValue('#scoreNum'), '87'); assert.equal(await page.inputValue('#note'), 'Hook needs a harder landing');
     pass('Score and notes from the planner show in Audio Board');
 
     // Add to current album, Add to another album, new album from the dropdown.
-    await page.goto(BASE + '/audio-board/album/');
+    await page.goto(BASE + '/audio/album/');
     await page.selectOption('#groupBy', 'none'); await page.click('[data-bucket-tab="alive"]');
     const cards = page.locator('#considerList .card');
     const s1 = await cards.nth(1).getAttribute('data-stem'), s2 = await cards.nth(2).getAttribute('data-stem'), s3 = await cards.nth(3).getAttribute('data-stem');

@@ -8,8 +8,8 @@ const ROOT = path.resolve(__dirname,'..');
 const BASE = process.env.APP_BASE_URL;
 const ARTIFACTS = process.env.ARTIFACT_DIR || path.join(ROOT,'..','album-board-verification');
 function catalogue(text) { const ctx={window:{}}; vm.runInNewContext(text,ctx); return ctx.window; }
-const current = catalogue(fs.readFileSync(path.join(ROOT,'album-board','songs.js'),'utf8'));
-const original = catalogue(execFileSync('git',['show','HEAD:album-board/songs.js'],{cwd:ROOT,encoding:'utf8'}));
+const current = catalogue(fs.readFileSync(path.join(ROOT,'lyrics','songs.js'),'utf8'));
+const original = catalogue(execFileSync('git',['show','HEAD:lyrics/songs.js'],{cwd:ROOT,encoding:'utf8'}));
 const oldVersions = original.ALBUM_SONGS.flatMap(s=>s.versions);
 const allVersions = current.ALBUM_SONGS.flatMap(s=>s.versions);
 assert.equal(new Set(allVersions.map(v=>v.stem)).size,allVersions.length,'Every version must have a distinct rating ID');
@@ -33,11 +33,11 @@ checked(`${allVersions.length} versions in ${current.ALBUM_SESSIONS.length} sess
     });
     const page=await context.newPage(), errors=[];
     page.on('pageerror',e=>errors.push(e.message));
-    await page.goto(BASE+'/album-board/',{waitUntil:'networkidle'});
+    await page.goto(BASE+'/lyrics/',{waitUntil:'networkidle'});
     const manifestURL = await page.locator('link[rel="manifest"]').getAttribute('href');
     const manifest = await (await context.request.get(new URL(manifestURL,page.url()).href)).json();
     assert.equal(manifest.name,'Lyric Board'); assert.equal(manifest.display,'standalone');
-    assert.equal(new URL(manifest.id,new URL(page.url()).origin).pathname,'/the-grind/album-board/');
+    assert.equal(new URL(manifest.id,new URL(page.url()).origin).pathname,'/s2g/lyrics/');
     const iconSizes = await page.evaluate(async icons => Promise.all(icons.map(icon => new Promise((resolve,reject) => {
       const image = new Image(); image.onload = () => resolve(`${image.naturalWidth}x${image.naturalHeight}`);
       image.onerror = () => reject(Error('App icon missing: '+icon.src)); image.src = icon.src;
@@ -48,7 +48,7 @@ checked(`${allVersions.length} versions in ${current.ALBUM_SESSIONS.length} sess
     const cdp = await context.newCDPSession(page);
     const appManifest = await cdp.send('Page.getAppManifest');
     assert.equal(appManifest.errors.length,0,'Chrome parses the app manifest');
-    assert.equal(new URL(appManifest.manifest.id).pathname,'/the-grind/album-board/','Check Chrome’s processed app ID');
+    assert.equal(new URL(appManifest.manifest.id).pathname,'/s2g/lyrics/','Check Chrome’s processed app ID');
     const install = await cdp.send('Page.getInstallabilityErrors');
     // Playwright's isolated context is incognito; Chrome prevents actual installation there.
     assert.equal(install.installabilityErrors.filter(e=>e.errorId!=='in-incognito').length,0,JSON.stringify(install.installabilityErrors));
@@ -61,7 +61,7 @@ checked(`${allVersions.length} versions in ${current.ALBUM_SESSIONS.length} sess
     assert.equal(await page.evaluate(()=>window.__installAsked),true);
     assert.equal(await page.locator('#installApp').isHidden(),true);
     checked('Chrome accepts the standalone Album Board manifest; service worker starts automatically and install button invokes the prompt');
-    assert.equal(await page.getByRole('link',{name:'Audio Board',exact:true}).getAttribute('href'),'../audio-board/');
+    assert.equal(await page.getByRole('link',{name:'Audio Board',exact:true}).getAttribute('href'),'../audio/');
     checked('Lyric Board links to its separate Audio Board');
     const song = current.ALBUM_SONGS.find(s=>s.slug==='check-out');
     const old = song.versions[0];

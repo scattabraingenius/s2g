@@ -1,8 +1,8 @@
 // One status per take per album: the model, the migration, and its behaviour against the synced store.
 // Pure Node, no browser:  node tests/planner-status.test.cjs
 const assert = require('node:assert/strict');
-const Status = require('../audio-board/album/planner-status.js');
-const Sync = require('../audio-board/album/planner-sync.js');
+const Status = require('../audio/album/planner-status.js');
+const Sync = require('../audio/album/planner-sync.js');
 const clone = v => JSON.parse(JSON.stringify(v));
 const pass = m => console.log('PASS ' + m);
 

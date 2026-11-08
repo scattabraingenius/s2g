@@ -1,8 +1,8 @@
 const {chromium}=require('playwright');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),assert=require('node:assert/strict');
 const ROOT=path.resolve(__dirname,'..'),BASE=process.env.APP_BASE_URL||'http://127.0.0.1:8765',OUT=path.join(ROOT,'test-artifacts/lyric-review');
-const R=require('../album-board/review-tools.js'),Sync=require('../album-board/sync.js');
-const w={window:{}};vm.runInNewContext(fs.readFileSync(path.join(ROOT,'album-board/songs.js'),'utf8'),w);
+const R=require('../lyrics/review-tools.js'),Sync=require('../lyrics/sync.js');
+const w={window:{}};vm.runInNewContext(fs.readFileSync(path.join(ROOT,'lyrics/songs.js'),'utf8'),w);
 const songs=w.window.ALBUM_SONGS,links=w.window.LYRIC_REVIEW_TAKES;
 const song=songs.find(s=>s.slug==='the-scattabrain-genius');const version=song.versions.find(v=>(links[v.stem]||[]).length>=2),take=links[version.stem][0],other=links[version.stem][1];
 const text=version.suno?.lyrics??version.lyrics;
@@ -30,11 +30,11 @@ function pureTests(){
   const context=await browser.newContext({viewport:{width:1440,height:1000}});
   await context.route('**/*',route=>new URL(route.request().url()).origin===new URL(BASE).origin?route.continue():route.abort());
   const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
-  await page.goto(BASE+'/album-board/',{waitUntil:'networkidle'});
+  await page.goto(BASE+'/lyrics/',{waitUntil:'networkidle'});
   const lyricSeed=empty();lyricSeed.ratings[version.stem]={score:97,note:'Keep this private review note'};
   const audioSeed=empty();audioSeed.ratings[take.id]={score:86,note:'Existing audio note'};audioSeed.ratings[other.id]={score:43};
   await page.evaluate(({lyricSeed,audioSeed})=>{localStorage.setItem('grind.album.v1',JSON.stringify(lyricSeed));localStorage.setItem('grind.audio.v1',JSON.stringify(audioSeed));},{lyricSeed,audioSeed});
-  await page.goto(BASE+`/album-board/?song=${song.slug}&version=${encodeURIComponent(version.stem)}`,{waitUntil:'networkidle'});
+  await page.goto(BASE+`/lyrics/?song=${song.slug}&version=${encodeURIComponent(version.stem)}`,{waitUntil:'networkidle'});
   assert.equal(await page.locator('#songScoreNum').inputValue(),'86');assert.match(await page.locator('.legacy-score').textContent(),/97/);
   assert.equal(await page.locator('#scoreNum').count(),0);
   await page.locator('#songScoreNum').fill('92');await page.locator('#songScoreNum').press('Tab');
@@ -76,18 +76,18 @@ function pureTests(){
   // A custom edit gets no automatic inherited markup and no inherited recording after text changes.
   await page.locator('#copyEdit').click();assert.equal(await page.locator('.passage-note').count(),0);
   await page.locator('#edLyrics').fill('A different lyric\nSecond line');await page.locator('#edLyrics').press('Tab');
-  await page.goto(BASE+'/album-board/',{waitUntil:'networkidle'});assert(await page.locator('#detail').isHidden());await page.locator(`.row[data-slug="${song.slug}"] .t`).click();assert.equal(await page.locator('#reviewTake').count(),0);assert.equal(await page.locator('#songScoreNum').inputValue(),'');
+  await page.goto(BASE+'/lyrics/',{waitUntil:'networkidle'});assert(await page.locator('#detail').isHidden());await page.locator(`.row[data-slug="${song.slug}"] .t`).click();assert.equal(await page.locator('#reviewTake').count(),0);assert.equal(await page.locator('#songScoreNum').inputValue(),'');
   check('Revised custom lyrics never inherit an old recording or highlights');
   // Every unrecorded version can be rated without creating or changing a take rating.
   const noAudio=songs.flatMap(s=>s.versions.map(v=>({s,v}))).find(({v})=>!links[v.stem]);
-  await page.goto(BASE+`/album-board/?song=${noAudio.s.slug}&version=${encodeURIComponent(noAudio.v.stem)}`,{waitUntil:'networkidle'});assert.equal(await page.locator('#songScoreNum').inputValue(),'');await page.locator('#songScoreNum').fill('88');await page.locator('#detailBack').click();assert(await page.locator('#detail').isHidden());await page.reload({waitUntil:'networkidle'});assert(await page.locator('#detail').isHidden());await page.locator(`.row[data-slug="${noAudio.s.slug}"] .t`).click();assert.equal(await page.locator('#songScoreNum').inputValue(),'88');
+  await page.goto(BASE+`/lyrics/?song=${noAudio.s.slug}&version=${encodeURIComponent(noAudio.v.stem)}`,{waitUntil:'networkidle'});assert.equal(await page.locator('#songScoreNum').inputValue(),'');await page.locator('#songScoreNum').fill('88');await page.locator('#detailBack').click();assert(await page.locator('#detail').isHidden());await page.reload({waitUntil:'networkidle'});assert(await page.locator('#detail').isHidden());await page.locator(`.row[data-slug="${noAudio.s.slug}"] .t`).click();assert.equal(await page.locator('#songScoreNum').inputValue(),'88');
   // The same take score/readiness is visible and editable in Audio Board.
-  await page.goto(BASE+'/audio-board/album/?take='+take.id,{waitUntil:'networkidle'});
+  await page.goto(BASE+'/audio/album/?take='+take.id,{waitUntil:'networkidle'});
   const card=page.locator(`.card[data-stem="${take.id}"]`).first();assert.equal(await card.locator('.score-in').inputValue(),'92');assert.equal(await card.locator('.take-readiness').inputValue(),'aside');
   await card.locator('.take-readiness').selectOption('ready');await card.locator('.score-in').fill('94');await card.locator('.score-in').press('Tab');
-  await page.goto(BASE+`/album-board/?song=${song.slug}&version=${encodeURIComponent(version.stem)}`,{waitUntil:'networkidle'});
+  await page.goto(BASE+`/lyrics/?song=${song.slug}&version=${encodeURIComponent(version.stem)}`,{waitUntil:'networkidle'});
   assert.equal(await page.locator('#songScoreNum').inputValue(),'94');assert.equal(await page.locator('#takeReadiness').inputValue(),'ready');
-  const audioPage=await context.newPage();await audioPage.goto(BASE+'/audio-board/album/?take='+take.id,{waitUntil:'networkidle'});
+  const audioPage=await context.newPage();await audioPage.goto(BASE+'/audio/album/?take='+take.id,{waitUntil:'networkidle'});
   const audioCard=audioPage.locator(`.card[data-stem="${take.id}"]`).first();await audioCard.locator('.score-in').fill('95');await audioCard.locator('.score-in').press('Tab');
   await page.waitForFunction(()=>document.querySelector('#songScoreNum')?.value==='95');
   await page.locator('#songScoreNum').fill('96');await page.locator('#songScoreNum').press('Tab');

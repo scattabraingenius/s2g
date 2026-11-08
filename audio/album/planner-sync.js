@@ -1,7 +1,7 @@
-/* Album Planner account sync. Same pattern as Lyric/Audio Board sync (album-board/sync.js):
+/* Album Planner account sync. Same pattern as Lyric/Audio Board sync (lyrics/sync.js):
    each planner item is its own record with a revision, records merge last-writer-wins,
    deletions keep tombstones, and Firebase transactions merge instead of replacing.
-   Scores, status and notes are Audio Board records, synced by album-board/sync.js. */
+   Scores, status and notes are Audio Board records, synced by lyrics/sync.js. */
 (function (root, factory) {
   const api = factory();
   if (typeof module === "object" && module.exports) module.exports = api;

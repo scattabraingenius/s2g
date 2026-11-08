@@ -3,11 +3,11 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
 const vm=require('node:vm');
-const Sync=require('../album-board/sync.js');
+const Sync=require('../lyrics/sync.js');
 const BASE=process.env.APP_BASE_URL;
 const ROOT=path.resolve(__dirname,'..');
 const ARTIFACTS=process.env.ARTIFACT_DIR || path.resolve(ROOT,'../audio-board-verification');
-const current={window:{}};vm.runInNewContext(fs.readFileSync(path.join(ROOT,'audio-board/tracks.js'),'utf8'),current);
+const current={window:{}};vm.runInNewContext(fs.readFileSync(path.join(ROOT,'audio/tracks.js'),'utf8'),current);
 const songs=current.window.ALBUM_SONGS;
 assert.equal(songs.length,223);assert.equal(new Set(songs.map(s=>s.slug)).size,223);
 assert(songs.every(s=>s.slug===s.versions[0].stem && s.versions.length===1));
@@ -48,7 +48,7 @@ const wait=async fn=>{for(let i=0;i<120;i++){if(await fn())return;await new Prom
     Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{window.__copied=text;}}});
    },lyricSeed);
    const page=await context.newPage();pages.push(page);page.on('pageerror',e=>errors.push(e.message));
-   await page.goto(BASE+'/audio-board/classic.html',{waitUntil:'networkidle'});
+   await page.goto(BASE+'/audio/classic.html',{waitUntil:'networkidle'});
    await wait(()=>page.locator('#syncStatus').textContent().then(t=>t.startsWith('Synced')));
    return {page,context};
   }
@@ -78,7 +78,7 @@ const wait=async fn=>{for(let i=0;i<120;i++){if(await fn())return;await new Prom
   console.log('PASS Each audio take has independent scores, notes and tracklist membership, synced across two devices');
   assert.deepEqual(server.get(LYRIC),lyricCloud);
   assert(writes.every(target=>target===AUDIO));
-  await phone.page.goto(new URL(lyricHref,BASE+'/audio-board/classic.html').href,{waitUntil:'networkidle'});
+  await phone.page.goto(new URL(lyricHref,BASE+'/audio/classic.html').href,{waitUntil:'networkidle'});
   assert.equal(await phone.page.locator('h1').textContent(),'Lyric Board');
   assert.equal(await phone.page.locator('#detail').getAttribute('data-stem'),first.versions[0].lyricStem);
   await wait(()=>phone.page.locator('#syncStatus').textContent().then(t=>t.startsWith('Synced')));
@@ -87,7 +87,7 @@ const wait=async fn=>{for(let i=0;i<120;i++){if(await fn())return;await new Prom
   assert.equal(await phone.page.locator('#note').inputValue(),'Existing lyric score');
   assert.equal(await phone.page.locator('#albumToggle').textContent(),'Remove from album');
   console.log('PASS Lyric scores and tracklist stay intact; matched audio opens the exact lyric packet');
-  await phone.page.goto(BASE+'/audio-board/classic.html?lyrics='+encodeURIComponent(first.versions[0].lyricStem),{waitUntil:'networkidle'});
+  await phone.page.goto(BASE+'/audio/classic.html?lyrics='+encodeURIComponent(first.versions[0].lyricStem),{waitUntil:'networkidle'});
   const linked=await phone.page.locator('#list .row').count();assert(linked>=2 && linked<15);
   await phone.page.locator('#clearLinkedLyrics').click();
   assert.equal(await phone.page.locator('#list .row').count(),songs.length);
@@ -119,11 +119,11 @@ const wait=async fn=>{for(let i=0;i<120;i++){if(await fn())return;await new Prom
   await phone.page.setViewportSize({width:390,height:844});
   await phone.page.locator('#detail').evaluate(el=>el.scrollIntoView({block:'start'}));
   await phone.page.screenshot({path:path.join(ARTIFACTS,'audio-phone.png')});
-  const manifest=await (await phone.context.request.get(BASE+'/audio-board/manifest.webmanifest')).json();
-  assert.equal(manifest.name,'Audio Board');assert.equal(new URL(manifest.id,new URL(BASE).origin).pathname,'/the-grind/audio-board/');
+  const manifest=await (await phone.context.request.get(BASE+'/audio/manifest.webmanifest')).json();
+  assert.equal(manifest.name,'Audio Board');assert.equal(new URL(manifest.id,new URL(BASE).origin).pathname,'/s2g/audio/');
   const cdp=await phone.context.newCDPSession(phone.page);
   const parsedManifest=await cdp.send('Page.getAppManifest');
-  assert.equal(parsedManifest.errors.length,0);assert.equal(new URL(parsedManifest.manifest.id).pathname,'/the-grind/audio-board/');
+  assert.equal(parsedManifest.errors.length,0);assert.equal(new URL(parsedManifest.manifest.id).pathname,'/s2g/audio/');
   assert.equal((await cdp.send('Page.getInstallabilityErrors')).installabilityErrors.filter(e=>e.errorId!=='in-incognito').length,0);
   await phone.page.waitForFunction(()=>!!navigator.serviceWorker.controller);
   await phone.context.setOffline(true);await phone.page.reload({waitUntil:'domcontentloaded'});

@@ -8,7 +8,7 @@ const BASE=process.env.APP_BASE_URL;
     await context.route('**/*',route=>new URL(route.request().url()).origin===new URL(BASE).origin?route.continue():route.abort());
     const page=await context.newPage(),errors=[];
     page.on('pageerror',error=>errors.push(error.message));
-    await page.goto(BASE+'/audio-board/classic.html',{waitUntil:'networkidle'});
+    await page.goto(BASE+'/audio/classic.html',{waitUntil:'networkidle'});
     // The live catalogue may have only one surviving take of a formerly used
     // example. Select a current pair with source disclosures for this UI test.
     const song = await page.evaluate(() => {

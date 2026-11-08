@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const sync = require('../album-board/sync.js');
+const sync = require('../lyrics/sync.js');
 const empty = () => ({v:2, ratings:{}, custom:{}, tracklist:[], pick:{}});
 const changed = (before, edit, device, time) => { const next=structuredClone(before); edit(next); return sync.capture(before,next,device,time); };
 let checks=0;

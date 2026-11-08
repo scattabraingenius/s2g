@@ -5,7 +5,7 @@ import shutil
 root=Path(__file__).resolve().parents[1]
 fp_root=root.parent/'MM..HOME'
 source=(fp_root/'index.html').read_text(encoding='utf-8')
-old=(root/'mm-home/index.html').read_text(encoding='utf-8')
+old=(root/'mm/index.html').read_text(encoding='utf-8')
 sb2g=(root/'index.html').read_text(encoding='utf-8')
 for pattern in [r'const FIREBASE_CONFIG\s*=\s*\{.*?\};',r'const FAMILY_ID\s*=.*?;']:
     assert re.search(pattern,source,re.S).group()==re.search(pattern,old,re.S).group(),'Cloud configuration differs; review before embedding'
@@ -28,13 +28,13 @@ for a,b in replacements.items():
     assert source.count(a)==1,a
     source=source.replace(a,b)
 # Keep both board destinations when the standalone family planner is re-embedded.
-source=source.replace('label:"Album", icon:"agenda", href:SB2G_URL+"album-board/"','label:"Lyrics", icon:"agenda", href:SB2G_URL+"album-board/"')
+source=source.replace('label:"Album", icon:"agenda", href:SB2G_URL+"lyrics/"','label:"Lyrics", icon:"agenda", href:SB2G_URL+"lyrics/"')
 if 'id:"audio", label:"Audio"' not in source:
-    album_link='  if(SB2G_URL) items.push({id:"album", label:"Lyrics", icon:"agenda", href:SB2G_URL+"album-board/"});'
+    album_link='  if(SB2G_URL) items.push({id:"album", label:"Lyrics", icon:"agenda", href:SB2G_URL+"lyrics/"});'
     assert source.count(album_link)==1,'Album Board destination missing from family planner'
-    source=source.replace(album_link,album_link+'\n  if(SB2G_URL) items.push({id:"audio", label:"Audio", icon:"time", href:SB2G_URL+"audio-board/"});')
+    source=source.replace(album_link,album_link+'\n  if(SB2G_URL) items.push({id:"audio", label:"Audio", icon:"time", href:SB2G_URL+"audio/"});')
 source=source.replace('src="./icons/nav/', 'src="../icons/nav/').replace('url("./icons/nav/', 'url("../icons/nav/')
-(root/'mm-home/index.html').write_text(source,encoding='utf-8',newline='\r\n')
+(root/'mm/index.html').write_text(source,encoding='utf-8',newline='\r\n')
 icons=root/'icons/nav'
 icons.mkdir(parents=True,exist_ok=True)
 for icon in sorted((fp_root/'icons/nav').iterdir()):

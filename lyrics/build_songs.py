@@ -94,7 +94,7 @@ def main(argv=None):
             from studio_import import build_studio, catalogue, audio_index
             songs,sessions,inputs,receipt = build_studio(args.source,catalogue(args.output))
             clips = attach_clips(songs,args.suno_titles)
-            links = audio_index(songs,HERE.parent/'audio-board/tracks.js')
+            links = audio_index(songs,HERE.parent/'audio/tracks.js')
         else:
             songs,sessions,inputs = build(args.source)
             clips = attach_clips(songs,args.suno_titles)

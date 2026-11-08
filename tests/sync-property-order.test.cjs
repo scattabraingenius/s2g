@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-for (const file of ['../album-board/sync.js', '../audio-board/album/planner-sync.js']) {
+for (const file of ['../lyrics/sync.js', '../audio/album/planner-sync.js']) {
   const sync = require(file);
   const record = {kind:'album', id:'debut', field:'', data:'{"name":"Debut","order":[]}', rev:[10,'device']};
   const reordered = Object.fromEntries(Object.entries(record).sort());

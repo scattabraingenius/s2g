@@ -1,4 +1,4 @@
-const {test}=require('node:test');const assert=require('node:assert/strict');const w=require('../dashboard/usage-widgets.js');
+const {test}=require('node:test');const assert=require('node:assert/strict');const w=require('../dash/usage-widgets.js');
 const now=Date.parse('2026-11-06T16:00:00Z');
 const win={key:'secondary',label:'Weekly',usedPercent:32,windowMinutes:10080,resetsAt:'2026-11-11T10:40:42Z',pace:{deltaPercent:1}};
 const p={id:'codex',name:'Codex',updatedAt:'2026-11-06T15:55:00Z',windows:[win]};

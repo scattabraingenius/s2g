@@ -56,7 +56,9 @@ async function assertNoHorizontalOverflow(page, label) {
     await assertNoHorizontalOverflow(page, "ScattaBrain phone view");
     await page.screenshot({ path: path.join(artifacts, "unified-phone-scattabrain.png"), fullPage: false });
 
-    await page.locator('#appNav a[data-page="time"]').click();
+    assert(await page.locator('#appNav a[data-page="time"]').count()===0,"Time button should be gone from the menu");
+    await page.evaluate(()=>{location.hash="#time";});
+    await page.locator("#timeView").waitFor({state:"visible"});
     assert((await page.url()).endsWith("/#time") && await page.locator("#timeView").isVisible(), "SB2G Time view did not open");
     assert(await page.locator(".og-eyebrow").textContent() === "The Grind", "The Grind label is wrong");
 
@@ -76,7 +78,7 @@ async function assertNoHorizontalOverflow(page, label) {
     assert(await trigger.getAttribute("aria-expanded") === "false", "Outside click did not close Life Admin");
 
     await page.locator('#appNav a[data-page="home"]').click();
-    await page.waitForURL("**/mm-home/");
+    await page.waitForURL("**/mm/");
     assert(await page.title() === "MM..HOME", "Unexpected MM..HOME page title");
     await checkSharedBar("MM..HOME");
     assert(await page.locator('#sb2gLink[href="../"]').count() === 1, "MM..HOME return button is missing");
@@ -84,12 +86,12 @@ async function assertNoHorizontalOverflow(page, label) {
     await page.screenshot({ path: path.join(artifacts, "unified-phone-mm-home.png"), fullPage: false });
 
     await page.locator('#appNav a[data-page="calendar"]').click();
-    assert((await page.url()).endsWith("/mm-home/#calendar"), "MM..HOME Calendar route did not activate");
+    assert((await page.url()).endsWith("/mm/#calendar"), "MM..HOME Calendar route did not activate");
     assert(await page.locator('#appNav a[data-page="calendar"][aria-current="page"]').count() === 1, "Calendar current-page state is missing");
 
     await page.locator("#lifeAdminTrigger").click();
     await page.locator('.la-link[data-page="bank"]').click();
-    assert((await page.url()).endsWith("/mm-home/#bank") && await page.locator("#bankPage").isVisible(), "Bank did not open from Life Admin");
+    assert((await page.url()).endsWith("/mm/#bank") && await page.locator("#bankPage").isVisible(), "Bank did not open from Life Admin");
     assert(await page.locator("#lifeAdminTrigger.is-current").count() === 1, "Life Admin active state is missing on Bank");
 
     await page.locator('#sb2gLink[href="../"]').click();
@@ -107,7 +109,7 @@ async function assertNoHorizontalOverflow(page, label) {
     assert(registration.caches.some(key => key.startsWith("scattabrain-unified-shell-v5-")), "Unified app shell cache was not created");
 
     await context.setOffline(true);
-    await page.goto(`${BASE}/mm-home/`, { waitUntil: "domcontentloaded" });
+    await page.goto(`${BASE}/mm/`, { waitUntil: "domcontentloaded" });
     assert(await page.title() === "MM..HOME", "MM..HOME did not open from the offline cache");
     await page.goto(`${BASE}/`, { waitUntil: "domcontentloaded" });
     assert(await page.title() === "ScattaBrain to Genius", "ScattaBrain did not open from the offline cache");

@@ -1,6 +1,6 @@
 # Audio Board
 
-A listening companion to Lyric Board. Open `/audio-board/`. Every Suno clip is one take with a separate score, Shortlist/Maybe/Cut decision, notes and tracklist membership. Recording IDs stay tied to Suno UUIDs even if titles change.
+A listening companion to Lyric Board. Open `/audio/`. Every Suno clip is one take with a separate score, Shortlist/Maybe/Cut decision, notes and tracklist membership. Recording IDs stay tied to Suno UUIDs even if titles change.
 
 The October 12 catalogue includes 295 clips: 190 vocal takes, 57 instrumentals and 48 stems. Vocals are the initial view. Filter by song, lyric writer, recording type or lyric-match status; search includes current and previous titles, lyrics and source files. Sort by newest, title or score. Custom listening sessions collect chosen takes across songs and sync between devices.
 
@@ -10,7 +10,7 @@ Every take has **Open in Suno** and **Copy title**. Exact matches link to the co
 
 Voice labels come from Suno persona metadata. The current catalogue identifies Write what I can on 125 takes: 86 vocals and 39 instrumentals. Vocal takes using that confirmed persona show Your voice; instrumentals show Persona setting. Six older vocals reference the vsJBrazen persona ID; its name is verified with Suno’s persona endpoint. Both IDs/names are recorded in `voice-personas.json` to retain labels when the feed omits a persona object. No persona listed means Suno has no persona attached, not that the track cannot contain an uploaded voice. Unknown metadata stays unconfirmed. Persona names preserve any explicitly named version; this persona has only one version, so no version number is invented. Use the voice filter to compare takes. Derived recordings also expose their recorded source-take links.
 
-Audio Board installs separately in Chrome using today’s original neon cassette icon, stored in `audio-board/icons/`. Its manifest ID and scope are `/audio-board/`; Lyric Board retains its original `/album-board/` identity. The shared service worker precaches both pages and their data. Audio itself remains online.
+Audio Board installs separately in Chrome using today’s original neon cassette icon, stored in `audio/icons/`. Its manifest ID and scope are `/audio/`; Lyric Board retains its original `/lyrics/` identity. The shared service worker precaches both pages and their data. Audio itself remains online.
 
 Scores, notes, listening sessions and exact-take tracklist sync using the existing Google sign-in. Local storage is `grind.audio.v1`; cloud records are isolated at `planners/the-grind-scattabrain-2026/album/audio/accounts/<UID>`. Lyric records, planner tasks and old local ratings are never copied or moved. Export/import is board-specific.
 
@@ -18,7 +18,7 @@ Scores, notes, listening sessions and exact-take tracklist sync using the existi
 
 Export full library metadata with the existing read-only Suno downloader and match it to SBGLP, then run:
 
-    python3 audio-board/build_tracks.py --library /path/to/library-current.json --matches /path/to/matched-data.json
+    python3 audio/build_tracks.py --library /path/to/library-current.json --matches /path/to/matched-data.json
 
 The CLI list response omits persona and media-source fields; importing it is supported, but those voice labels remain unconfirmed. Use a full feed export to retain voice/source provenance.
 
@@ -34,11 +34,11 @@ Browser checks use an isolated backend with synthetic accounts and cover indepen
 
 ## Installation identity fix
 
-The previous `id: "./"` resolved against the site origin, making both boards collide. The fixed IDs are `/the-grind/album-board/` and `/the-grind/audio-board/`. Start URLs, scopes, browser storage and cloud score paths are unchanged. A previously installed board with the shared origin-root identity may need to be removed and installed again from the correct board URL. Tests now verify Chrome’s processed identities as well as origin-based ID resolution.
+The previous `id: "./"` resolved against the site origin, making both boards collide. The fixed IDs are `/s2g/lyrics/` and `/s2g/audio/`. Start URLs, scopes, browser storage and cloud score paths are unchanged. A previously installed board with the shared origin-root identity may need to be removed and installed again from the correct board URL. Tests now verify Chrome’s processed identities as well as origin-based ID resolution.
 
 ## Album Planner
 
-`/audio-board/album/` is where album decisions happen. **Adding to** at the top picks the album you're building; every status on a card applies to that album.
+`/audio/album/` is where album decisions happen. **Adding to** at the top picks the album you're building; every status on a card applies to that album.
 
 **One status per take, per album.** Unreviewed → Maybe → Shortlist → On album, and any of them can become Cut. Score stays a separate number (sorting and the Unscored filter), and **Delete** stays a separate, library-wide Suno cleanup tag: tagged takes are hidden from the buckets.
 
@@ -50,7 +50,7 @@ The previous `id: "./"` resolved against the site origin, making both boards col
 - **Guardrails**: the target line turns amber when over and red when well over ("17/12 tracks · 5 over target"). Adding a second take of a song already on the album asks "Replace C1.1 with M1.2 on Album 1?" (Replace puts the new take in the old take's place and sends the old one to Shortlist; Keep both warns on every take of that song). With grouping by song, each header says whether the song is on the album and by which take. A sticky **tracklist panel** (a bottom bar on phones) lists the album's tracks with lengths, running total and warnings; drag or ↑/↓ to reorder.
 - **Sessions** group like-takes (Compare, Compare all, or Auto-build). **Album** orders the current album, lists Shortlist/Maybe takes ready to place, and shows **What's missing**. **Suno cleanup** lists takes to delete (with **Keep** to remove the tag) and to rename.
 
-Where each status lives, so it syncs with records the planner already had: On album is the album's `order`; Cut is the album's `cut`; Maybe/Shortlist is `considered[stem].marks[albumId]`; Unreviewed is none of those (`audio-board/album/planner-status.js`). An album with `statusV: 2` has been converted. **Migration** (first load after this change): the planner backs up first (`grind.planner.v1.premigration`, downloadable from **Status migration log**), then for every take and album the first matching rule wins: On album (position kept) → Cut → Shortlist → Maybe → Unreviewed. Takes that carried more than one flag are written to the conflict log (`grind.planner.v1.migration`). The old Audio Board Shortlist/Maybe/Cut flags are read once and left untouched. A signed-in device converts only after its account has loaded, an already-converted album is never converted again, and converted data merges like any other planner record.
+Where each status lives, so it syncs with records the planner already had: On album is the album's `order`; Cut is the album's `cut`; Maybe/Shortlist is `considered[stem].marks[albumId]`; Unreviewed is none of those (`audio/album/planner-status.js`). An album with `statusV: 2` has been converted. **Migration** (first load after this change): the planner backs up first (`grind.planner.v1.premigration`, downloadable from **Status migration log**), then for every take and album the first matching rule wins: On album (position kept) → Cut → Shortlist → Maybe → Unreviewed. Takes that carried more than one flag are written to the conflict log (`grind.planner.v1.migration`). The old Audio Board Shortlist/Maybe/Cut flags are read once and left untouched. A signed-in device converts only after its account has loaded, an already-converted album is never converted again, and converted data merges like any other planner record.
 
 Planner records (albums, per-album statuses, sessions, renames, delete tags) sync at `planners/the-grind-scattabrain-2026/album/planner/accounts/<UID>`; scores and notes sync through Audio Board's own account child. Both use the per-record revision merge with tombstones. Local keys: `grind.planner.v1` and Audio Board's `grind.audio.v1`.
 

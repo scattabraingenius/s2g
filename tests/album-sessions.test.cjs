@@ -1,7 +1,7 @@
 const {chromium}=require('playwright');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),assert=require('node:assert/strict');
 const BASE=process.env.APP_BASE_URL,ARTIFACTS=process.env.ARTIFACT_DIR || path.resolve(__dirname,'../../album-session-verification');
-const catalogue={window:{}};vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../album-board/songs.js'),'utf8'),catalogue);
+const catalogue={window:{}};vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../lyrics/songs.js'),'utf8'),catalogue);
 const songs=catalogue.window.ALBUM_SONGS, song=songs.find(s=>s.slug==='the-scattabrain-genius'), good=songs.find(s=>s.slug==='good-enough');
 const old=song.versions.filter(v=>v.session==='Oct 9 Lyric Mine'), cue=song.versions.find(v=>v.session==='Oct 10 Cue Battle 01'), misc=song.versions.find(v=>v.session==='Oct 10 Misc Battle 01');
 const goodCue=good.versions.find(v=>v.session==='Oct 10 Cue Battle 01'),goodMisc=good.versions.find(v=>v.session==='Oct 10 Misc Battle 01');
@@ -13,7 +13,7 @@ const checks=[];function checked(label){checks.push(label);console.log('PASS '+l
   const context=await browser.newContext({viewport:{width:390,height:844}});
   await context.route('**/*',route=>new URL(route.request().url()).origin===new URL(BASE).origin?route.continue():route.abort());
   const page=await context.newPage(),errors=[];page.on('pageerror',error=>errors.push(error.message));
-  await page.goto(BASE+'/album-board/',{waitUntil:'networkidle'});
+  await page.goto(BASE+'/lyrics/',{waitUntil:'networkidle'});
   const seed={v:2,ratings:{[old[0].stem]:{score:20},[old[1].stem]:{score:90},[cue.stem]:{score:99},[misc.stem]:{score:5},[goodCue.stem]:{score:50},[goodMisc.stem]:{score:100},'check-out_v01_Cue':{score:80}},tracklist:['check-out'],pick:{},custom:{},collections:{}};
   await page.evaluate(seed=>localStorage.setItem('grind.album.v1',JSON.stringify(seed)),seed);await page.reload({waitUntil:'networkidle'});
   const row=()=>page.locator('.row[data-slug="the-scattabrain-genius"]');

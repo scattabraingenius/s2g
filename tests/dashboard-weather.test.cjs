@@ -1,5 +1,5 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
-const source=fs.readFileSync(require('node:path').join(__dirname,'../dashboard/dashboard.js'),'utf8');
+const source=fs.readFileSync(require('node:path').join(__dirname,'../dash/dashboard.js'),'utf8');
 const flush=()=>new Promise(setImmediate);
 function boot(storage){
  const nodes=new Map(),requests=[];const node=id=>{if(!nodes.has(id))nodes.set(id,{style:{},classList:{toggle(){}},innerHTML:'',textContent:''});return nodes.get(id);};

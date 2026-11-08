@@ -2,7 +2,7 @@
 import copy,hashlib,json,re,subprocess,sys,tempfile,unittest
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
-sys.path.insert(0,str(ROOT/'album-board'))
+sys.path.insert(0,str(ROOT/'lyrics'))
 from studio_import import build_studio,catalogue,audio_index
 
 class StudioTest(unittest.TestCase):
@@ -54,9 +54,9 @@ class StudioTest(unittest.TestCase):
 
     def test_live_import_retains_every_original_id_text_and_prompt(self):
         # Git's baseline predates this feature; compare all 132 old versions, not a sample.
-        raw=subprocess.check_output(['git','show','HEAD:album-board/songs.js'],cwd=ROOT).decode('utf-8')
+        raw=subprocess.check_output(['git','show','HEAD:lyrics/songs.js'],cwd=ROOT).decode('utf-8')
         original=json.loads(re.search(r'^window.ALBUM_SONGS = (.*);$',raw,re.M)[1])
-        current=catalogue(ROOT/'album-board/songs.js');by_id={v['stem']:v for s in current for v in s['versions']}
+        current=catalogue(ROOT/'lyrics/songs.js');by_id={v['stem']:v for s in current for v in s['versions']}
         for song in original:
             for old in song['versions']:
                 self.assertIn(old['stem'],by_id)
@@ -67,7 +67,7 @@ class StudioTest(unittest.TestCase):
         receipt_path=ROOT/'test-artifacts/lyric-review/studio-import.json'
         if not receipt_path.is_file():self.skipTest('Private Studio receipt not available')
         receipt=json.loads(receipt_path.read_text(encoding='utf-8'));root=Path(receipt['source'])
-        before=catalogue(ROOT/'album-board/songs.js');again=build_studio(root,before)[0]
+        before=catalogue(ROOT/'lyrics/songs.js');again=build_studio(root,before)[0]
         ids=lambda rows:{v['stem'] for s in rows for v in s['versions']}
         self.assertEqual(ids(before),ids(again))
         for relative,digest in receipt['sha256'].items():self.assertEqual(hashlib.sha256((root/relative).read_bytes()).hexdigest(),digest,relative)

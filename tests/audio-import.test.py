@@ -1,6 +1,6 @@
 import importlib.util, json, tempfile, unittest
 from pathlib import Path
-spec=importlib.util.spec_from_file_location("builder",Path(__file__).resolve().parents[1]/"audio-board/build_tracks.py")
+spec=importlib.util.spec_from_file_location("builder",Path(__file__).resolve().parents[1]/"audio/build_tracks.py")
 builder=importlib.util.module_from_spec(spec);spec.loader.exec_module(builder)
 class AudioImportTest(unittest.TestCase):
     def test_private_and_signed_urls_are_not_exported_as_players(self):

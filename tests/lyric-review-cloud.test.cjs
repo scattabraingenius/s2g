@@ -3,7 +3,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
 const BASE=process.env.APP_BASE_URL||'http://127.0.0.1:8765',root=path.resolve(__dirname,'..');
 const source=fs.readFileSync(path.join(__dirname,'album-sync-browser.test.cjs'),'utf8');
 const fakeSDK=source.match(/const fakeSDK=String.raw`([\s\S]*?)`;\r?\nconst checks/)[1];
-const data={window:{}};vm.runInNewContext(fs.readFileSync(path.join(root,'album-board/songs.js'),'utf8'),data);
+const data={window:{}};vm.runInNewContext(fs.readFileSync(path.join(root,'lyrics/songs.js'),'utf8'),data);
 const song=data.window.ALBUM_SONGS.find(s=>s.slug==='the-scattabrain-genius'),v=song.versions.find(v=>data.window.LYRIC_REVIEW_TAKES[v.stem]?.length>=2),take=data.window.LYRIC_REVIEW_TAKES[v.stem][0];
 const wait=async fn=>{for(let i=0;i<150;i++){if(await fn())return;await new Promise(r=>setTimeout(r,50));}throw Error('Timed out waiting for review sync');};
 const stored=(page,key)=>page.evaluate(key=>JSON.parse(localStorage.getItem(key)),key);
@@ -23,7 +23,7 @@ const stored=(page,key)=>page.evaluate(key=>JSON.parse(localStorage.getItem(key)
    });
    await ctx.addInitScript(()=>{window.__initialUser={uid:'review-owner',email:'review@example.test'};});await ctx.addInitScript(fakeSDK);
    const p=await ctx.newPage();p.on('pageerror',e=>errors.push(e.message));pages.push(p);
-   await p.goto(BASE+`/album-board/?song=${song.slug}&version=${encodeURIComponent(v.stem)}`,{waitUntil:'networkidle'});
+   await p.goto(BASE+`/lyrics/?song=${song.slug}&version=${encodeURIComponent(v.stem)}`,{waitUntil:'networkidle'});
    await wait(async()=>((await p.locator('#syncStatus').textContent()).startsWith('Synced')&&(await p.locator('#audioReviewStatus').textContent()).startsWith('Synced')));return p;
   }
   const a=await client(),b=await client();

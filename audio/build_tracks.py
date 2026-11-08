@@ -29,7 +29,7 @@ def build(library, matches, lyric_catalogue):
     profiles_file=HERE/'voice-personas.json'
     profiles=json.loads(profiles_file.read_text(encoding='utf-8-sig')).get('personas',{}) if profiles_file.is_file() else {}
     old_titles = {}
-    snapshot = HERE.parent/'album-board/suno-titles.csv'
+    snapshot = HERE.parent/'lyrics/suno-titles.csv'
     if snapshot.exists():
         import csv
         with snapshot.open(encoding='utf-8-sig', newline='') as f: old_titles = {r['clip_id']:r['old_title'] for r in csv.DictReader(f)}
@@ -83,7 +83,7 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--library',required=True,type=Path)
     p.add_argument('--matches',type=Path)
-    p.add_argument('--lyrics-catalogue',type=Path,default=HERE.parent/'album-board/songs.js')
+    p.add_argument('--lyrics-catalogue',type=Path,default=HERE.parent/'lyrics/songs.js')
     p.add_argument('--output',type=Path,default=HERE/'tracks.js')
     args = p.parse_args()
     try: songs,sessions,built=build(args.library,args.matches,args.lyrics_catalogue)
@@ -93,7 +93,7 @@ def main():
     tmp=args.output.with_suffix('.js.tmp');tmp.write_text(content,encoding='utf-8');tmp.replace(args.output)
     if args.output.resolve()==(HERE/'tracks.js').resolve():
         counts=dict(collections.Counter(s['versions'][0]['lyricStem'] for s in songs if s['versions'][0]['lyricStem']))
-        (HERE.parent/'album-board/audio-links.js').write_text('window.LYRIC_AUDIO_COUNTS = '+json.dumps(counts)+';\n')
+        (HERE.parent/'lyrics/audio-links.js').write_text('window.LYRIC_AUDIO_COUNTS = '+json.dumps(counts)+';\n')
         runpy.run_path(str(HERE.parent/'scripts/refresh-board-cache.py'),run_name='__main__')
     print(f'{len(songs)} audio takes; '+', '.join(str(s["versions"])+" "+s["label"] for s in sessions))
 if __name__=='__main__': main()

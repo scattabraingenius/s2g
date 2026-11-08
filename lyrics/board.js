@@ -8,7 +8,7 @@ const plannerReturn = new URLSearchParams(location.search).get("returnTo");
 if (plannerReturn) {
   try {
     const destination = new URL(plannerReturn, location.href);
-    const plannerPath = new URL("../audio-board/album/", location.href).pathname;
+    const plannerPath = new URL("../audio/album/", location.href).pathname;
     const link = document.getElementById("returnToPlanner");
     if (link && destination.origin === location.origin && destination.pathname === plannerPath) {
       link.href = destination.pathname + destination.search;
@@ -256,7 +256,7 @@ function renderDetail() {
     <div class="meta">${v.custom ? `Your version${src ? ", copied from " + esc(verLabel(src)) : ""}. Edits save as you type.` : esc(v.header || "")}</div>
     ${AUDIO_BOARD ? audioHtml(v) : `<div class="versions">${vs.map(x => chipHtml(s, x, v)).join("")}</div>`}
     ${!AUDIO_BOARD && v.naming ? `<div class="meta">Suno naming: ${esc(v.naming)}.[clip number] · instrumental: ${esc(v.naming.replace(/\.([CMS])/,'.i$1'))}.[clip number]</div>` : ''}
-    ${!AUDIO_BOARD && window.LYRIC_AUDIO_COUNTS?.[v.stem] ? `<p class="meta"><a href="../audio-board/?lyrics=${encodeURIComponent(v.stem)}">Compare ${window.LYRIC_AUDIO_COUNTS[v.stem]} Suno takes on Audio Board →</a></p>` : ""}
+    ${!AUDIO_BOARD && window.LYRIC_AUDIO_COUNTS?.[v.stem] ? `<p class="meta"><a href="../audio/?lyrics=${encodeURIComponent(v.stem)}">Compare ${window.LYRIC_AUDIO_COUNTS[v.stem]} Suno takes on Audio Board →</a></p>` : ""}
     <div class="eyebrow">${AUDIO_BOARD ? "Score for this take" : "Score for "+esc(verLabel(v))} (0 to 100)</div>
     <div class="scorebox">
       <input type="range" aria-label="Version score" min="0" max="100" step="1" id="scoreRange" value="${r.score ?? 50}">
@@ -577,7 +577,7 @@ function initAlbumSync() {
 
 const lyricSearch = title => String(title || "").replace(/^[A-Z]-\s+/, "").replace(/(\s+(v\d+|\d+|misc|-\s*\w+))+$/i, "").trim();
 function audioHtml(v) {
-  const sourceLink = v.lyricSlug && v.lyricStem ? `<a class="btn small" href="../album-board/?song=${encodeURIComponent(v.lyricSlug)}&version=${encodeURIComponent(v.lyricStem)}">Open matching lyrics</a>` : `<a class="btn small" href="../album-board/?q=${encodeURIComponent(lyricSearch(BY[v.stem]?.baseTitle || v.title))}">Find lyrics</a>`;
+  const sourceLink = v.lyricSlug && v.lyricStem ? `<a class="btn small" href="../lyrics/?song=${encodeURIComponent(v.lyricSlug)}&version=${encodeURIComponent(v.lyricStem)}">Open matching lyrics</a>` : `<a class="btn small" href="../lyrics/?q=${encodeURIComponent(lyricSearch(BY[v.stem]?.baseTitle || v.title))}">Find lyrics</a>`;
   return `<div class="meta">${esc(verLabel(v))}${v.voiceName ? "" : "<br>"+esc(voiceLabel(v))}<br>${esc(v.match)}${v.oldTitle && v.oldTitle !== v.title ? `<br>Previously: ${esc(v.oldTitle)}` : ''}</div>
     <div class="audio-controls"><a class="btn primary" id="openSuno" href="https://suno.com/song/${esc(v.stem)}" target="_blank" rel="noopener noreferrer">Open in Suno ↗</a><button class="btn small" data-copy="title">Copy title</button>${sourceLink}</div>
     ${v.audioUrl ? `<audio class="audio-player" controls preload="none" src="${esc(v.audioUrl)}"></audio>` : ''}

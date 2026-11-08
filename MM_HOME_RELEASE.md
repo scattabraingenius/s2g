@@ -128,3 +128,7 @@ No local-storage keys, cloud configuration or household records were changed by 
 same-tab navigation from FP to SB2G and back, visible EHAH navigation, remembered profile,
 shared manifest/worker scope and offline EHAH reload. Phone layout inspected.
 Physical installed-iPhone acceptance is still Jason's first-use check.
+
+---
+
+**2026-11-07 address change:** this repo is now `scattabraingenius/s2g` and is served at https://scattabraingenius.github.io/s2g/. Folders were renamed to match the menu: `album-board` → `lyrics`, `audio-board` → `audio`, `dashboard` → `dash`, `mm-home` → `mm`. The `the-grind` and `family-planner` addresses are redirect pages only. Everything above is history and still uses the old names.
