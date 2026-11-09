@@ -98,7 +98,6 @@ async function loadWeather(){
 $("wxUnits").onclick = () => { prefs.units = units() === "c" ? "f" : "c"; savePrefs(); loadWeather(); };
 
 /* ---------------- usage feed ---------------- */
-const PROVIDER_COLOR = {claude:"var(--claude)", codex:"var(--codex)"};
 let feed = null, feedError = "";
 
 function feedUrls(){
@@ -133,21 +132,65 @@ function fmtLeft(ms){
 }
 function fmtAgo(ms){ const m = Math.round(ms / 60000); return m < 1 ? "just now" : m < 60 ? `${m} min ago` : `${fmtLeft(ms)} ago`; }
 
+/* Runway card: verdict, one weekly chart for both providers, provider tiles, insights, history.
+   All numbers come from GrindWidgets.usageModel in usage-widgets.js. */
+const SHOW = ["both","codex","claude"];
+const usageShow = () => SHOW.includes(prefs.usageShow) ? prefs.usageShow : "both";
+const widthOf = id => Math.max(300, Math.round($(id).clientWidth || 600));
+let usageModel = null;
+
 function renderUsage(){
-  const now = Date.now();
-  const byId = Object.fromEntries((feed?.providers || []).map(p => [p.id, p]));
-  for(const type of ['burn','history']){
-    const row = $(type === 'burn' ? 'burnRow' : 'historyRow');
-    row.innerHTML = ['codex','claude'].map(id => {
-      const p = byId[id];
-      if(!p) return `<article class="provider-widget" style="--pc:${PROVIDER_COLOR[id]}"><b>${id === 'codex' ? 'Codex' : 'Claude'}</b><p class="empty">${feedError ? 'Usage feed unavailable. Retry refresh.' : feed ? 'Provider unavailable in feed.' : 'Loading…'}</p></article>`;
-      return `<article class="provider-widget" style="--pc:${PROVIDER_COLOR[id]}">${GrindWidgets.card(p,type,feed,now,!!feedError)}</article>`;
-    }).join('');
-  }
+  const now = Date.now(), G = globalThis.GrindWidgets;
   const age = feed?.checkedAt ? now - Date.parse(feed.checkedAt) : null;
   $('feedAge').textContent = feedError ? 'Feed unavailable · showing last received readings' : age == null ? '' : `Feed checked ${fmtAgo(age)}`;
   $('feedAge').classList.toggle('warn', !!feedError || age > FEED_STALE_MS);
+  if(typeof G?.usageModel !== "function") return;
+  usageModel = G.usageModel(feed, now, !!feedError);
+  const show = usageShow();
+  for(const b of document.querySelectorAll?.("[data-show]") || []) b.setAttribute("aria-pressed", String(b.dataset.show === show));
+  if(!usageModel.ready){
+    $('usageVerdict').textContent = feedError ? 'Usage feed unavailable. Try Refresh.' : feed ? 'No provider data in the feed.' : 'Loading usage…';
+    for(const id of ['runway','runwayLegend','usageTiles','usageInsights','dailyChart','tokenChart']) $(id).innerHTML = '';
+    return;
+  }
+  $('usageVerdict').innerHTML = G.verdict(usageModel);
+  drawRunway();
+  $('usageTiles').innerHTML = usageModel.ids.filter(id => show === "both" || show === id).map(id => G.tile(usageModel, id)).join('');
+  $('usageTiles').classList.toggle('single', show !== "both" || usageModel.ids.length < 2);
+  $('usageInsights').innerHTML = G.insightsHtml(usageModel);
+  $('dailyChart').innerHTML = G.dailyChart(usageModel, widthOf('dailyChart'));
+  $('tokenChart').innerHTML = G.tokenChart(usageModel, widthOf('tokenChart'));
 }
+function drawRunway(){
+  const G = globalThis.GrindWidgets, show = usageShow(), host = $('runway'), tip = $('runwayTip');
+  const r = G.runway(usageModel, widthOf('runway'), show);
+  host.innerHTML = r.svg; $('runwayLegend').innerHTML = G.runwayLegend(usageModel, show); tip.hidden = true;
+  const svg = host.querySelector?.("svg"); if(!svg || !r.t1) return;
+  const xh = svg.querySelector(".xhair");
+  const move = e => {
+    const box = svg.getBoundingClientRect(), px = (e.clientX - box.left) * (r.W / box.width);
+    const t = r.t0 + (px - r.pad.l) / (r.W - r.pad.l - r.pad.r) * (r.t1 - r.t0);
+    if(t < r.t0 || t > r.t1) return leave();
+    xh.setAttribute("x1", px); xh.setAttribute("x2", px); xh.setAttribute("opacity", ".4");
+    tip.innerHTML = G.runwayTip(usageModel, t, show); tip.hidden = false;
+    const wrap = $('runwayWrap').getBoundingClientRect(), tw = tip.offsetWidth;
+    tip.style.left = Math.min(Math.max(0, e.clientX - wrap.left - tw / 2), wrap.width - tw) + "px";
+  };
+  const leave = () => { tip.hidden = true; xh.setAttribute("opacity", "0"); };
+  svg.addEventListener("pointermove", move);
+  svg.addEventListener("pointerdown", move);
+  svg.addEventListener("pointerleave", leave);
+}
+for(const b of document.querySelectorAll?.("[data-show]") || []) b.onclick = () => { prefs.usageShow = b.dataset.show; savePrefs(); renderUsage(); };
+// Quota-per-day opens by default on wide screens; both sections remember their state per device.
+for(const id of ["usageDaily","usageLogs"]){
+  const d = $(id), open = prefs.usageOpen?.[id];
+  if(!d.addEventListener) continue;
+  d.open = open ?? (id === "usageDaily" && !!globalThis.matchMedia?.("(min-width: 900px)").matches);
+  d.addEventListener("toggle", () => { prefs.usageOpen = {...prefs.usageOpen, [id]: d.open}; savePrefs(); if(d.open && usageModel?.ready) renderUsage(); });
+}
+let resizeTimer;
+globalThis.addEventListener?.("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => usageModel?.ready && renderUsage(), 150); });
 $('refreshUsage').onclick = () => loadFeed();
 
 /* ---------------- start ---------------- */
