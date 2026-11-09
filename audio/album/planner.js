@@ -1,8 +1,13 @@
 "use strict";
 // Album Planner. Score and notes are Audio Board records (one score per take everywhere).
 // Albums, the per-album status of every take (see planner-status.js), sessions, renames and the Delete tag are planner records.
-if ("serviceWorker" in navigator) navigator.serviceWorker.register("../../service-worker.js").catch(() => {});
+// A host page (the Studio Board) registers the shared worker from its own folder.
+if ("serviceWorker" in navigator && !window.PLANNER_HOST) navigator.serviceWorker.register("../../service-worker.js").catch(() => {});
 const KEY = "grind.planner.v1";
+// Optional host page (the Studio Board) that shows these views inside its own shell. Absent on the Audio Board page,
+// where everything below behaves exactly as before.
+const HOST = window.PLANNER_HOST || null;
+const hostOwnsPage = () => !!HOST && !HOST.plannerVisible();   // the host is showing its own page (a song), not a planner view
 const AUDIO_KEY = "grind.audio.v1";
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -92,6 +97,7 @@ let restoringNavigation = false;
 const navigation = () => ({view:ui.view, session:ui.session, album:ui.album});
 function saveView() {
   try { localStorage.setItem(KEY + ".view", JSON.stringify({...ui, q:undefined, only:undefined, song:undefined, lyricsOpen:undefined})); } catch (err) {}
+  if (HOST) { if (!restoringNavigation) HOST.navigated(navigation()); return; }
   if (!restoringNavigation && JSON.stringify(history.state?.plannerNavigation) !== JSON.stringify(navigation())) {
     const url = new URL(location.href);
     for (const [key, value] of Object.entries(navigation())) value ? url.searchParams.set(key, value) : url.searchParams.delete(key);
@@ -108,7 +114,7 @@ else if (route.has("lyrics")) ui.only = {lyrics:route.get("lyrics")};
 if (route.has("q")) ui.q = route.get("q").trim();
 history.replaceState({...history.state, plannerNavigation:navigation()}, "");
 window.addEventListener("popstate", e => {
-  if (!e.state?.plannerNavigation) return;
+  if (HOST || !e.state?.plannerNavigation) return;
   Object.assign(ui, e.state.plannerNavigation);
   restoringNavigation = true; saveView(); restoringNavigation = false; render();
 });
@@ -312,7 +318,7 @@ function card(stem, opts = {}) {
     <div class="media-row">
       <a class="btn small" data-play href="${suno(stem)}" target="_blank" rel="noopener">▶ Suno</a>
       <button class="btn small" type="button" data-act="lyrics" aria-expanded="${open}">Lyrics ${open ? "▾" : "▸"}</button>
-      <a class="btn small" href="${esc(boardHref(`../classic.html?take=${encodeURIComponent(stem)}`))}" title="Full detail view: voice persona, source takes, Suno fields">Details</a>
+      <a class="btn small" href="${esc(HOST ? HOST.detailsHref(stem) : boardHref(`../classic.html?take=${encodeURIComponent(stem)}`))}" title="Full detail view: voice persona, source takes, Suno fields">Details</a>
       <button class="btn small danger" type="button" data-act="delete" aria-pressed="${del}" title="${del ? "Remove the delete tag" : "Tag this take to delete on Suno"}">${del ? "Undelete" : "Delete"}</button>
       <span class="more">
         <button class="icon-btn more-btn" type="button" data-act="menu" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for ${esc(name)}">⋯</button>
@@ -324,7 +330,7 @@ function card(stem, opts = {}) {
       </span>
     </div>
     <div class="lyrics-body"${open ? "" : " hidden"}>
-      <a class="btn small" href="${esc(boardHref(lyricHref(stem)))}" title="${t.lyricStem ? "Open the matching lyric version" : "No exact lyric match; searches Lyric Board for this song"}">${t.lyricStem ? "Open in Lyric Board ↗" : "Find lyrics ↗"}</a>
+      <a class="btn small" href="${esc(HOST ? HOST.lyricHref(stem) : boardHref(lyricHref(stem)))}" title="${t.lyricStem ? "Open the matching lyric version" : "No exact lyric match; searches Lyric Board for this song"}">${t.lyricStem ? "Open in Lyric Board ↗" : "Find lyrics ↗"}</a>
       ${lyrics ? `<pre class="lyrics">${lyricHtml(lyrics)}</pre>` : `<p class="meta">Suno has no lyrics saved for this take.</p>`}
     </div>
     <textarea class="note" rows="1" placeholder="Notes" aria-label="Notes for ${esc(name)}">${esc(r.note || "")}</textarea>
@@ -338,7 +344,7 @@ const editing = () => document.activeElement?.matches?.(".score-in, .note, #sess
 function setOptions(el, html) { if (el.dataset.html !== html) { el.innerHTML = html; el.dataset.html = html; } }
 function requestRender() { if (editing()) pendingRender = true; else render(); }
 document.addEventListener("focusout", () => setTimeout(() => { if (pendingRender && !editing()) { pendingRender = false; render(); } }, 150));
-const cardEl = stem => document.querySelector(`.card[data-stem="${CSS.escape(stem)}"]`);
+const cardEl = stem => (hostOwnsPage() ? HOST.cardRoot() : document).querySelector(`.card[data-stem="${CSS.escape(stem)}"]`);
 function render() {
   normalize();
   if (!state.albums[ui.album]) ui.album = Object.entries(state.albums).sort(([, a], [, b]) => a.created - b.created)[0][0];
@@ -348,6 +354,7 @@ function render() {
   ({sort:renderSort, consider:renderConsider, sessions:renderSessions, albums:renderAlbums, cleanup:renderCleanup})[ui.view]();
   document.querySelectorAll("textarea.note").forEach(fit);
   if (focusStem && (!document.activeElement || document.activeElement === document.body)) cardEl(focusStem)?.focus({preventScroll:true});
+  HOST?.rendered?.();
 }
 function renderTarget() {
   const albums = Object.entries(state.albums).sort(([, a], [, b]) => a.created - b.created), a = album(), ts = targetState(a);
@@ -378,7 +385,7 @@ function renderChrome() {
 // ---------- sticky tracklist panel ----------
 const PANEL_VIEWS = ["sort", "consider", "sessions"];
 function renderPanel() {
-  const show = PANEL_VIEWS.includes(ui.view), panel = $("trackPanel");
+  const show = HOST ? HOST.panelVisible(ui.view) : PANEL_VIEWS.includes(ui.view), panel = $("trackPanel");
   panel.classList.toggle("hidden", !show); document.body.classList.toggle("has-panel", show);
   if (!show) return;
   const a = album(), ts = targetState(a), twins = dupesOn(a);
@@ -529,7 +536,7 @@ function belongsHere(stem) {
 }
 function settle(stem) {
   renderChrome();
-  const box = ui.view === "consider" ? $("considerList") : ui.view === "sort" ? $("sortList") : null;
+  const box = hostOwnsPage() ? null : ui.view === "consider" ? $("considerList") : ui.view === "sort" ? $("sortList") : null;
   const el = box && [...box.querySelectorAll(".card")].find(c => c.dataset.stem === stem);
   if (!el) { render(); return; }
   if (belongsHere(stem)) {
@@ -842,14 +849,14 @@ document.addEventListener("focusout", e => {
 
 // ---------- keyboard triage ----------
 const typingIn = el => el?.closest?.("input, textarea, select, [contenteditable]:not([contenteditable=false])");
-function visibleCards() { return [...document.querySelectorAll(`#view${{sort:"Sort", consider:"Consider", sessions:"Sessions"}[ui.view] || "None"} .card:not(.leaving)`)]; }
+function visibleCards() { if (hostOwnsPage()) return [...HOST.cardRoot().querySelectorAll(".card:not(.leaving)")]; return [...document.querySelectorAll(`#view${{sort:"Sort", consider:"Consider", sessions:"Sessions"}[ui.view] || "None"} .card:not(.leaving)`)]; }
 function focusCard(el) { if (!el) return; focusStem = el.dataset.stem; el.focus({preventScroll:true}); el.scrollIntoView({block:"nearest", behavior:reducedMotion() ? "auto" : "smooth"}); }
 document.addEventListener("keydown", e => {
   if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || typingIn(e.target) || document.querySelector("dialog[open]")) return;
   const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
   if (key === "?") { e.preventDefault(); $("keysDialog").showModal(); return; }
   if (key === "z") { e.preventDefault(); undo(); return; }
-  if (!PANEL_VIEWS.includes(ui.view)) return;
+  if (HOST ? !HOST.keysActive(ui.view) : !PANEL_VIEWS.includes(ui.view)) return;
   const cards = visibleCards(), at = e.target.closest?.(".card") || (focusStem && cardEl(focusStem)) || null, i = cards.indexOf(at);
   if (key === "j") { e.preventDefault(); focusCard(cards[i + 1] || (i < 0 ? cards[0] : null)); return; }
   if (key === "k") { e.preventDefault(); focusCard(i > 0 ? cards[i - 1] : i < 0 ? cards[0] : null); return; }
@@ -1054,4 +1061,10 @@ if (!Object.keys(state.albums).length || Object.values(state.albums).some(a => !
 ensureMigrated();   // signed-out devices convert now; signed-in devices wait for their account (see showStatus)
 render();
 initSync();
+if (HOST) window.PlannerApp = {
+  get state() { return state; }, get audio() { return audio; }, ui, take, card, statusOf, nameOf, labelOf, takeLabel, albumOf, sessionsOf, item, tagged,
+  setStatus, toggleStatus, placeTake, toggleDelete, rename, setRating, rating, openCompare, playOnSuno, undo, render, requestRender, saveView, save, consider, toast, gotoSession,
+  show:(view) => { if (VIEWS.includes(view)) { ui.view = view; restoringNavigation = true; saveView(); restoringNavigation = false; } render(); },
+  restore:(nav) => { Object.assign(ui, nav); restoringNavigation = true; saveView(); restoringNavigation = false; render(); },
+};
 // Same-account cross-tab Audio Board changes are merged by the storage listener above.

@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0C0812">
+<title>Studio Board</title>
+<link rel="icon" type="image/png" sizes="32x32" href="../lyrics/icons/lyric-notebook-32.png">
+<link rel="stylesheet" href="../lyrics/board.css">
+<link rel="stylesheet" href="../lyrics/review.css">
+<link rel="stylesheet" href="../audio/album/planner.css">
+<link rel="stylesheet" href="studio.css">
+<!--LOCAL_SESSION-->
+</head>
+<body>
+<div class="studio" id="studio">
+  <header class="studio-top">
+    <div class="studio-brand"><span class="eyebrow">The Grind · Studio</span><b>Studio Board</b></div>
+    <div class="account-bar">
+      <span id="syncStatus" role="status" aria-live="polite">Checking sign-in… Your changes are saved on this device.</span>
+      <span id="accountWho"></span>
+      <button class="btn small" id="signInBtn" hidden>Sign in with Google</button>
+      <button class="btn small" id="signOutBtn" hidden>Sign out</button>
+      <button class="btn small" id="retrySyncBtn" hidden>Retry sync</button>
+      <button class="btn small" id="dataBtn" title="Backups, exports and imports">Backups</button>
+    </div>
+    <div class="sync-more" id="syncMore" role="status" aria-live="polite"></div>
+  </header>
+  <div class="notice hidden" id="migrationNotice" role="status"></div>
+
+  <nav class="rail" id="rail" aria-label="Views">
+    <button class="rail-item" data-view="songs" id="tabSongs">Songs <small id="countSongs"></small></button>
+    <button class="rail-item" data-view="sort" id="tabSort">Triage <small id="countSort"></small></button>
+    <button class="rail-item" data-view="consider" id="tabConsider">Album picks <small id="countConsider"></small></button>
+    <button class="rail-item" data-view="sessions" id="tabSessions">Sessions <small id="countSessions"></small></button>
+    <button class="rail-item" data-view="albums" id="tabAlbums">Albums <small id="countAlbums"></small></button>
+    <button class="rail-item" data-view="cleanup" id="tabCleanup">Cleanup <small id="countCleanup"></small></button>
+    <button class="rail-item" data-view="inventory" id="tabInventory">Inventory</button>
+  </nav>
+
+  <section class="songs-col" id="songsCol" aria-label="Songs">
+    <div class="list-tools">
+      <input type="search" id="songQ" placeholder="Search songs, lyrics, notes ( / )" aria-label="Search songs" autocomplete="off">
+      <div class="list-filters">
+        <select id="fLocation" aria-label="Where the song is"></select>
+        <select id="fWriter" aria-label="Writer"></select>
+        <select id="fStatus" aria-label="Song status"></select>
+        <select id="fSort" aria-label="Sort songs"></select>
+      </div>
+      <label class="check"><input type="checkbox" id="fPrompts"> Show beat prompts</label>
+    </div>
+    <div class="song-count" id="songCount"></div>
+    <div class="song-list" id="songList" role="listbox" aria-label="Songs"></div>
+  </section>
+
+  <main class="page" id="pageWrap" tabindex="-1">
+    <div id="page"></div>
+
+    <!-- The Album Planner's views, run by audio/album/planner.js. -->
+    <div id="plannerHost" class="planner-host">
+      <div class="tabs" hidden></div><!-- planner.js binds its tab clicks here; the rail switches views instead -->
+      <p class="meta" id="summary"></p>
+      <section id="viewSort" class="hidden">
+        <div class="tools">
+          <input type="search" id="sortQ" aria-label="Search takes to sort" placeholder="Search titles, writers, notes, lyrics" autocomplete="off">
+          <select id="sortSong" aria-label="Show one song"></select>
+          <select id="sortType" aria-label="Recording type"></select>
+          <select id="sortSort" aria-label="Sort"></select>
+          <button class="btn small" type="button" id="sortSortDir">↑ Asc</button>
+        </div>
+        <div class="chips" id="sortChips" aria-label="Show"></div>
+        <p class="meta" id="sortStats"></p>
+        <p class="meta hint">Pick a bucket for each take: an album or <b>Later</b>. It leaves this list and the next one moves up. <span class="keyhint">S shortlist · M maybe · A album · C cut · Z undo · ? all keys</span></p>
+        <div id="sortList"></div>
+      </section>
+      <section id="viewConsider" class="hidden">
+        <div class="bucket-tabs" id="bucketTabs" role="tablist" aria-label="Status for the album you are building"></div>
+        <div class="tools">
+          <input type="search" id="q" aria-label="Search takes" placeholder="Search titles, writers, notes, lyrics" autocomplete="off">
+          <select id="sort" aria-label="Sort"></select>
+          <button class="btn small" type="button" id="sortDir">↑ Asc</button>
+          <select id="songFilter" aria-label="Show one song"></select>
+          <select id="groupBy" aria-label="Grouping"></select>
+          <select id="typeFilter" aria-label="Recording type"></select>
+          <button class="chip" type="button" id="unscoredChip" aria-pressed="false">Unscored only</button>
+        </div>
+        <p class="meta hidden" id="onlyBanner"><span id="onlyText"></span> <button class="btn small" id="clearOnly">Show all takes</button></p>
+        <div class="scope-tools">
+          <button class="btn small primary" id="importOpen">+ Add takes</button>
+          <button class="btn small" id="autoGroup" title="Make a compare session for every song with two or more takes that aren't in a session yet">Auto-build sessions</button>
+          <span class="meta hint" id="keyHint">S shortlist · M maybe · A album · C cut · Z undo · ? all keys</span>
+        </div>
+        <div id="considerList"></div>
+      </section>
+      <section id="viewSessions" class="hidden">
+        <div class="session-layout">
+          <div id="sessionList" class="session-index"></div>
+          <div id="sessionDetail" class="detail empty">Pick a session to compare its takes.</div>
+        </div>
+        <div id="sessionExtras"></div>
+      </section>
+      <section id="viewAlbums" class="hidden">
+        <div class="album-layout">
+          <div>
+            <div class="album-head" id="albumHead"></div>
+            <ol class="tracklist" id="albumTracks"></ol>
+            <h3 class="sub">Ready to place</h3>
+            <p class="meta">Shortlist and Maybe takes that aren't on any album, minus anything cut from this one.</p>
+            <div id="pool"></div>
+          </div>
+          <aside class="missing" id="missing" aria-label="What's missing"></aside>
+        </div>
+      </section>
+      <section id="viewCleanup" class="hidden">
+        <div id="cleanupExtras"></div>
+        <h2>Delete and rename on Suno</h2>
+        <div id="cleanup"></div>
+      </section>
+    </div>
+  </main>
+
+  <footer class="dock" aria-label="Album you're building">
+    <div class="target-bar" id="targetBar">
+      <label for="targetAlbum">Adding to</label>
+      <select id="targetAlbum" aria-label="Album you are building"></select>
+      <button class="btn small" type="button" id="renameAlbum" title="Rename this album">✎ Rename</button>
+      <span class="target-stats" id="targetStats"></span>
+    </div>
+    <aside class="track-panel" id="trackPanel" aria-label="Album tracklist">
+      <button class="panel-bar" id="panelBar" type="button" aria-expanded="false" aria-controls="panelBody"></button>
+      <div class="panel-body" id="panelBody"></div>
+    </aside>
+  </footer>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"><span id="toastText"></span> <button class="btn small hidden" id="toastUndo">Undo</button></div>
+
+<dialog id="dataDialog" aria-labelledby="dataTitle">
+  <h2 id="dataTitle">Backups</h2>
+  <p class="meta">Everything is saved on this device and, when you're signed in, to your Google account. These files are extra copies you keep yourself.</p>
+  <h3 class="sub">Albums, statuses and sessions</h3>
+  <div class="foot">
+    <span class="save-status" id="saveStatus" role="status">Saved on this device.</span>
+    <span id="built"></span>
+    <button class="btn small" id="exportBtn">Export plan</button>
+    <button class="btn small" id="importBtn">Import plan</button>
+    <button class="btn small" id="logBtn">Status migration log</button>
+    <input type="file" id="importFile" accept="application/json" class="hidden">
+  </div>
+  <h3 class="sub">Lyric reviews, highlights and your copies</h3>
+  <div class="foot">
+    <button class="btn small" id="lyricExport">Export lyric scores</button>
+    <button class="btn small" id="reviewExport">Export review backup</button>
+    <button class="btn small" id="lyricImport">Import or restore</button>
+    <input type="file" id="lyricImportFile" accept="application/json" class="hidden">
+  </div>
+  <h3 class="sub">Song decisions</h3>
+  <div class="foot"><button class="btn small" id="studioExport">Export song decisions</button></div>
+  <div class="scope-tools"><button class="btn" id="dataClose">Done</button></div>
+</dialog>
+
+<dialog id="importDialog" aria-labelledby="importTitle">
+  <h2 id="importTitle">Add takes to Album picks</h2>
+  <p class="meta">Pull in a whole Audio Board listening session, paste Suno links, or search the catalogue. Takes already in Album picks are skipped.</p>
+  <h3 class="sub">From Audio Board</h3>
+  <div id="importSources" class="import-sources"></div>
+  <h3 class="sub">Paste Suno links or IDs</h3>
+  <textarea id="pasteIds" placeholder="https://suno.com/song/…  one per line, or a whole copied playlist page"></textarea>
+  <div class="scope-tools"><button class="btn small" id="pasteAdd">Add pasted</button><span class="meta" id="pasteNote"></span></div>
+  <h3 class="sub">Search the catalogue</h3>
+  <input type="search" id="catalogSearch" placeholder="Find a take" aria-label="Find a take in the catalogue">
+  <label class="inline"><input type="checkbox" id="catalogAll"> include instrumentals and stems</label>
+  <div id="catalogResults" class="session-options"></div>
+  <div class="scope-tools"><button class="btn" id="importClose">Done</button></div>
+</dialog>
+
+<dialog id="compareDialog" aria-labelledby="compareTitle">
+  <h2 id="compareTitle">Compare</h2>
+  <div id="compareBody"></div>
+  <div class="scope-tools"><button class="btn" id="compareCancel">Cancel</button></div>
+</dialog>
+
+<dialog id="replaceDialog" aria-labelledby="replaceTitle">
+  <h2 id="replaceTitle">Replace?</h2>
+  <p class="meta" id="replaceText"></p>
+  <div class="scope-tools"><button class="btn primary" id="replaceYes">Replace</button><button class="btn" id="replaceBoth">Keep both</button><button class="btn" id="replaceCancel">Cancel</button></div>
+</dialog>
+
+<dialog id="keysDialog" aria-labelledby="keysTitle">
+  <h2 id="keysTitle">Keyboard shortcuts</h2>
+  <p class="meta">Take keys act on the card with the ring around it, on a song page, Triage, Album picks and Sessions. Never while you're typing in a box.</p>
+  <dl class="keys">
+    <dt><kbd>S</kbd></dt><dd>Shortlist</dd>
+    <dt><kbd>M</kbd></dt><dd>Maybe</dd>
+    <dt><kbd>A</kbd></dt><dd>Add to the album (asks first if the song is already on it)</dd>
+    <dt><kbd>C</kbd></dt><dd>Cut</dd>
+    <dt><kbd>U</kbd></dt><dd>Back to Unreviewed</dd>
+    <dt><kbd>Z</kbd></dt><dd>Undo the last album or status change</dd>
+    <dt><kbd>J</kbd> / <kbd>K</kbd></dt><dd>Next / previous take</dd>
+    <dt><kbd>Space</kbd></dt><dd>Play: opens the take on Suno</dd>
+    <dt><kbd>[</kbd> / <kbd>]</kbd></dt><dd>Previous / next song</dd>
+    <dt><kbd>/</kbd></dt><dd>Search songs</dd>
+    <dt><kbd>?</kbd></dt><dd>This list</dd>
+    <dt>Score box</dt><dd>Type a number, <kbd>Enter</kbd> jumps to the next take</dd>
+  </dl>
+  <div class="scope-tools"><button class="btn" id="keysClose">Done</button></div>
+</dialog>
+
+<dialog id="logDialog" aria-labelledby="logTitle">
+  <h2 id="logTitle">Status migration log</h2>
+  <div id="logBody"></div>
+  <div class="scope-tools"><button class="btn small" id="logCopy">Copy log</button><button class="btn small" id="logBackup">Download backup</button><button class="btn" id="logClose">Done</button></div>
+</dialog>
+
+<dialog id="colorDialog" aria-labelledby="colorTitle">
+  <h2 id="colorTitle">Highlight colour names</h2>
+  <div id="colorFields"></div>
+  <div class="scope-tools"><button class="btn primary" id="colorSave">Save</button><button class="btn" id="colorCancel">Cancel</button></div>
+</dialog>
+
+<script src="../lyrics/songs.js"></script>
+<script>window.LYRIC_SONGS = window.ALBUM_SONGS || []; window.LYRIC_BUILT = window.ALBUM_BUILT || ""; window.LYRIC_SESSIONS = window.ALBUM_SESSIONS || [];</script>
+<script src="../audio/tracks.js"></script>
+<script>window.TAKE_SONGS = window.ALBUM_SONGS || []; window.TAKES_BUILT = window.ALBUM_BUILT || "";</script>
+<script src="catalog.js"></script>
+<script src="../lyrics/review-tools.js"></script>
+<script src="../lyrics/sync.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="../audio/album/planner-sync.js"></script>
+<script src="../audio/album/planner-status.js"></script>
+<script src="studio-sync.js"></script>
+<script src="model.js"></script>
+<script src="host.js"></script>
+<script src="../audio/album/planner.js"></script>
+<script src="stores.js"></script>
+<script src="local.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

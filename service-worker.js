@@ -1,4 +1,4 @@
-const CACHE_NAME = "scattabrain-unified-shell-v5-4c1d2e7a9b30";
+const CACHE_NAME = "scattabrain-unified-shell-v5-273bcb3a4167";
 // Cache Storage is per-origin, not per service-worker scope: /the-grind/ and /s2g/ share one
 // origin (scattabraingenius.github.io), so an unqualified CACHE_NAME could let one site's
 // activate cleanup delete the other site's live cache once their content hashes diverge.
@@ -34,6 +34,16 @@ const APP_SHELL = [
   "./audio/album/planner-sync.js",
   "./audio/album/planner-status.js",
   "./audio/album/planner.css",
+  "./studio/",
+  "./studio/index.html",
+  "./studio/studio.css",
+  "./studio/catalog.js",
+  "./studio/model.js",
+  "./studio/host.js",
+  "./studio/stores.js",
+  "./studio/studio-sync.js",
+  "./studio/local.js",
+  "./studio/app.js",
   "./dash/",
   "./dash/index.html",
   "./dash/dashboard.js?v=20261108-runway2",
@@ -98,7 +108,7 @@ self.addEventListener("fetch", event => {
         return response;
       }).catch(() =>
         caches.match(request).then(response => response ||
-          (url.pathname.includes("/audio/") ? caches.match("./audio/index.html") : url.pathname.includes("/lyrics/") ? caches.match("./lyrics/index.html") : url.pathname.includes("/mm/") ? caches.match("./mm/index.html") : url.pathname.includes("/dash/") ? caches.match("./dash/index.html") : caches.match("./index.html")))
+          (url.pathname.includes("/audio/") ? caches.match("./audio/index.html") : url.pathname.includes("/lyrics/") ? caches.match("./lyrics/index.html") : url.pathname.includes("/mm/") ? caches.match("./mm/index.html") : url.pathname.includes("/dash/") ? caches.match("./dash/index.html") : url.pathname.includes("/studio/") ? caches.match("./studio/index.html") : caches.match("./index.html")))
       )
     );
     return;
