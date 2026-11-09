@@ -1091,6 +1091,8 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script src="capture/vault-sync.js?v=20261109-vault2"></script>
 <script src="capture/vault-store.js?v=20261109-vault2"></script>
+<script src="sync/list-sync.js?v=20261109-tasks2"></script>
+<script src="sync/list-store.js?v=20261109-tasks2"></script>
 <script>
 "use strict";
 const VERSION = "1.2-beta";
@@ -1264,7 +1266,20 @@ window.addEventListener("resize",()=>{
 const PAYLOAD_V=2;
 const K_TASKS="grind.plan.v1", K_SHOP="grind.shopping.v1", K_PEOPLE="grind.profiles.v1", K_PLACES="grind.places.v1", K_DATES="grind.dates.v1", K_BILLS="grind.bills.v1", K_PREFS="grind.viewprefs.v1", K_NOTES="grind.notes.v1", K_SETTINGS="grind.settings.v1", K_BYL="grind.before-you-leave.v1", K_BYL_TITLE="grind.before-you-leave-title.v1", K_ACTIVE_PROFILES="grind.activeProfiles.v1", K_FOCUS_PRESETS="grind.focusPresets.v1", K_WORDS="grind.words.v1", K_VAULT="grind.vault.v1";
 function loadJSON(k){ try{ const r=localStorage.getItem(k); if(r) return JSON.parse(r); }catch(e){} return null; }
-function saveTasks(){ try{ localStorage.setItem(K_TASKS, JSON.stringify(tasks)); }catch(e){} pushCloud(); return true; }
+/* Tasks Sync v2: with TaskStore every save turns the edited `tasks` array into per-task records (only
+   the parts that changed), each written to its own localStorage key before this returns. See
+   sync/list-store.js. {auto:true} marks an automatic change (normalizeLater) that must never outrank
+   a real edit. The fallback is the old whole-array save, used only if the sync scripts failed to load. */
+function saveTasks(opts){
+  if(taskStore){
+    taskCommitting=true;
+    try{ lastTaskSave=taskStore.commitList(tasks, opts||{}); } finally{ taskCommitting=false; }
+    tasksMirrorSigNow=taskMirrorSig(taskStore.mirror());
+    rebuildTasks(); pushCloud(); updateSyncBadge();
+    return lastTaskSave.durable!==false;
+  }
+  try{ localStorage.setItem(K_TASKS, JSON.stringify(tasks)); }catch(e){} pushCloud(); return true;
+}
 function saveShop(){ try{ localStorage.setItem(K_SHOP, JSON.stringify(shop)); }catch(e){} pushCloud(); }
 /* View-only filters (Done / Later / Someday) — deliberately local-only, never pushed to Firebase,
    since they're per-device display preferences, not shared planner data. */
@@ -1368,8 +1383,9 @@ function attachCloud(){
     db=firebase.database().ref("planners/"+APP_ID);
     syncing=true;
     db.on("value", applyGrindSnapshot, onCloudError);
-    firebase.database().ref(".info/connected").on("value", s=>{ cloudConnected = s.val()===true; if(syncing) updateSyncBadge(); if(vaultStore) vaultStore.setOffline(!cloudConnected); renderVaultStatus(); });
+    firebase.database().ref(".info/connected").on("value", s=>{ cloudConnected = s.val()===true; if(syncing) updateSyncBadge(); if(vaultStore) vaultStore.setOffline(!cloudConnected); if(taskStore) taskStore.setOffline(!cloudConnected); renderVaultStatus(); });
     if(vaultStore && typeof VaultSync!=="undefined") vaultStore.attach(firebase.database().ref(VaultSync.PATH + authUser.uid));
+    if(taskStore) taskStore.attach(firebase.database().ref(ListSync.pathFor("tasks") + authUser.uid));
     attachFamilyLink();
   }catch(e){ syncing=false; updateSyncBadge(); }
 }
@@ -1378,6 +1394,8 @@ function detachCloud(){
   clearTimeout(pushTimer);
   db=null; syncing=false; remoteApplying=false; cloudConnected=false;
   if(vaultStore) vaultStore.detach();
+  if(taskStore) taskStore.detach();
+  tasksCloudSeen=false;
   detachFamilyLink();
 }
 /* A read failure must NEVER be mistaken for "the cloud is empty" — that path seeds the cloud from
@@ -1398,7 +1416,11 @@ function hasLocalPlannerData(){
 }
 function applyGrindSnapshot(snap){
       const v=snap.val();
-      if(!v){ if(hasLocalPlannerData()) pushCloud(true); return; }   // cloud empty → seed from this device, but only if this device actually has something
+      if(!v){   // cloud empty → seed from this device, but only if this device actually has something
+        if(taskStore){ taskStore.adoptCloud(null, false); tasksCloudSeen=true; rebuildTasks(); }
+        if(hasLocalPlannerData()) pushCloud(true);
+        return;
+      }
       remoteApplying=true;
       let daddyRepaired=false;
       if(Array.isArray(v.people)){
@@ -1422,7 +1444,17 @@ function applyGrindSnapshot(snap){
          excluded: an empty profile list is never intended and would take the app's structure with it. */
       const full = Number(v.payloadV)>=2;
       const listOrEmpty=(raw,map)=>Array.isArray(raw) ? raw.map(map) : (full?[]:null);
-      { const x=listOrEmpty(v.tasks,migrateTask); if(x) tasks=x; }
+      /* Tasks Sync v2: the `tasks` array here is only the old-format mirror. It is merged in as a union
+         (it can add tasks an older tab created, never delete or revive one), and on this device's first
+         snapshot after the upgrade it replaces the pre-upgrade local list once, as it always did. */
+      let tasksMirrorStale=false;
+      if(taskStore){
+        taskStore.adoptCloud(Array.isArray(v.tasks) ? v.tasks : null, Array.isArray(v.tasks) || full);
+        tasksCloudSeen=true; rebuildTasks();
+        const incoming=taskMirrorSig(v.tasks); tasksMirrorSigNow=taskMirrorSig(taskStore.mirror());
+        if(incoming!==tasksMirrorSigNow && incoming!==tasksRepairedFrom){ tasksMirrorStale=true; tasksRepairedFrom=incoming; }   // once per stale copy, so a mismatch can never loop
+      }
+      else { const x=listOrEmpty(v.tasks,migrateTask); if(x) tasks=x; }
       { const x=listOrEmpty(v.shop,s=>Object.assign(blankShop(),s)); if(x) shop=x; }
       { const x=listOrEmpty(v.places,migratePlace); if(x) places=x; }
       { const x=listOrEmpty(v.importantDates,migrateImportantDate); if(x) importantDates=x; }
@@ -1447,13 +1479,13 @@ function applyGrindSnapshot(snap){
       { const inc=ogParseActive(v.otherGrindActive); if(inc!==undefined){ ogActive=inc; ogDecisionShownFor=null; } }
       if(v.otherGrindSettings && typeof v.otherGrindSettings==="object"){ const wh=Number(v.otherGrindSettings.wakingHours); if(Number.isFinite(wh)&&wh>0&&wh<=24) ogSettings.wakingHours=wh; }
       try{ localStorage.setItem(K_OG_SESSIONS,JSON.stringify(ogSessions)); localStorage.setItem(K_OG_ACTIVE,JSON.stringify(ogActivePayload())); localStorage.setItem(K_OG_SETTINGS,JSON.stringify(ogSettings)); }catch(e){}
-      try{ localStorage.setItem(K_PEOPLE,JSON.stringify(people)); localStorage.setItem(K_TASKS,JSON.stringify(tasks)); localStorage.setItem(K_SHOP,JSON.stringify(shop)); localStorage.setItem(K_PLACES,JSON.stringify(places)); localStorage.setItem(K_DATES,JSON.stringify(importantDates)); localStorage.setItem(K_BILLS,JSON.stringify(bills)); localStorage.setItem(K_NOTES,JSON.stringify(notes)); localStorage.setItem(K_BYL,JSON.stringify(beforeYouLeave)); localStorage.setItem(K_BYL_TITLE,JSON.stringify(bylTitle)); localStorage.setItem(K_WORDS,JSON.stringify(words)); localStorage.setItem(K_VAULT,JSON.stringify(vault)); }catch(e){}
+      try{ localStorage.setItem(K_PEOPLE,JSON.stringify(people)); if(!taskStore) localStorage.setItem(K_TASKS,JSON.stringify(tasks)); localStorage.setItem(K_SHOP,JSON.stringify(shop)); localStorage.setItem(K_PLACES,JSON.stringify(places)); localStorage.setItem(K_DATES,JSON.stringify(importantDates)); localStorage.setItem(K_BILLS,JSON.stringify(bills)); localStorage.setItem(K_NOTES,JSON.stringify(notes)); localStorage.setItem(K_BYL,JSON.stringify(beforeYouLeave)); localStorage.setItem(K_BYL_TITLE,JSON.stringify(bylTitle)); localStorage.setItem(K_WORDS,JSON.stringify(words)); localStorage.setItem(K_VAULT,JSON.stringify(vault)); }catch(e){}
       remoteApplying=false;
       // Repair push happens strictly after remoteApplying is reset, so it goes through the normal
       // guard exactly like any other local change — never bypassing it, never firing while a remote
       // snapshot is still being applied, and (since ensureGrindDaddyProfile is idempotent and the
       // next snapshot will already contain Daddy) never looping.
-      if(daddyRepaired || vaultMirrorStale) pushCloud();
+      if(daddyRepaired || vaultMirrorStale || tasksMirrorStale) pushCloud();
       // Data is always safe to merge in (every commit path re-fetches its entity by id), but a full render()
       // would blow away a focused inline editor's DOM — so defer the redraw until editing ends.
       if(!editingActive()) render(); else pendingRemoteRender=true;
@@ -1465,16 +1497,19 @@ function pushCloud(force){
      Since a stale v1.4 tab's set() has no importantDates key, its set() would still erase importantDates
      (update() only protects against writers that also use update() with a partial payload); this change
      protects future fields added the same way, but v1.4 tabs must still be closed/refreshed — see report. */
-  pushTimer=setTimeout(()=>{ try{ db.update({people,tasks,shop,places,importantDates,bills,notes,beforeYouLeave,beforeYouLeaveTitle:bylTitle,words,vault,otherGrindSessions:ogSessions,otherGrindActive:ogActivePayload(),otherGrindSettings:ogSettings,payloadV:PAYLOAD_V,updated:Date.now()}); }catch(e){} }, 250);
+  /* With TaskStore, `tasks` is the old-format mirror of the records, and it is left out until this
+     page has seen the cloud copy once, so a device can never push its pre-upgrade list over it. */
+  pushTimer=setTimeout(()=>{ try{ const payload={people,tasks:taskStore?taskStore.mirror():tasks,shop,places,importantDates,bills,notes,beforeYouLeave,beforeYouLeaveTitle:bylTitle,words,vault,otherGrindSessions:ogSessions,otherGrindActive:ogActivePayload(),otherGrindSettings:ogSettings,payloadV:PAYLOAD_V,updated:Date.now()}; if(taskStore && !tasksCloudSeen) delete payload.tasks; db.update(payload); }catch(e){} }, 250);
 }
 function updateSyncBadge(){
   const el=document.getElementById("syncBadge"); if(!el) return;
   const set=(txt,color,title)=>{ el.textContent=txt; el.style.color=color; el.title=title; };
   if(!syncConfigured()) return set("○ Local only","var(--muted-2)","Add your Firebase config to sync across devices");
   if(!authReady)        return set("○ Checking sign-in…","var(--muted-2)","Restoring your session");
-  if(!authUser)         return set("○ Signed out","var(--muted-2)","Saving on this device only — sign in to sync");
+  if(!authUser)         return set("○ Signed out","var(--muted-2)","Saving on this device only — sign in to sync" + (taskStore && taskStore.pendingCount() ? ` (${taskStore.pendingCount()} task changes waiting)` : ""));
   if(permissionDenied)  return set("⚠ Not authorised","var(--alarm)","This account isn't allowed to read this planner");
-  set(cloudConnected ? "● Synced" : "● Offline", cloudConnected ? "#23B877" : "var(--star)", cloudConnected ? "Live sync on" : "Reconnecting…");
+  const waiting=taskStore ? taskStore.pendingCount() : 0, held=waiting ? ` · ${waiting} task change${waiting===1?"":"s"} saved on this device, not yet synced` : "";
+  set(cloudConnected ? "● Synced" : "● Offline", cloudConnected ? "#23B877" : "var(--star)", (cloudConnected ? "Live sync on" : "Reconnecting…") + held);
 }
 /* The sign-in surface. Deliberately two states worth interrupting for and nothing else: signed out,
    and signed in but refused by the rules. When sync is healthy this renders nothing at all. */
@@ -1892,8 +1927,53 @@ function migrateImportantDate(raw){
 function localMoment(ymd, hm){ if(!ymd) return null; const t=/^\d{2}:\d{2}$/.test(hm||"")?hm:"00:00"; const d=new Date(`${ymd}T${t}`); return isNaN(d)?null:d; }
 function dayDiff(fromYmd, toYmd){ const a=localMoment(fromYmd), b=localMoment(toYmd); if(!a||!b) return 0; return Math.round((b-a)/86400000); }
 
-let tasks = loadJSON(K_TASKS); if(!tasks){ tasks=[]; saveTasks(); }
-tasks = tasks.map(migrateTask);
+/* TASKS are stored by TaskStore (sync/list-store.js): one record per task with a revision per part,
+   every change written to its own localStorage key before the UI moves on, synced to
+   tasksSync/accounts/<uid> with merging transactions. `tasks` below is the working copy the whole app
+   reads and edits in place; saveTasks() turns the edits into records. It must never be assigned from
+   a cloud snapshot again (that is what used to wipe offline and signed-out changes). grind.plan.v1 and
+   the cloud `tasks` array are kept as an old-format mirror for older tabs and the dashboard. */
+/* migrateTask, made deterministic for sync: a task with no creation time gets 0, not "now", so every
+   device and every save fills in the same defaults. */
+function normalizeTaskForSync(raw){ const t=migrateTask(raw); if(!(raw && Number.isFinite(raw.created))) t.created=0; return t; }
+const taskStore = (typeof ListStore!=="undefined" && typeof ListSync!=="undefined")
+  ? ListStore.create({ list:"tasks", label:"Tasks", legacyKey:K_TASKS, groups:[["status","showOn"]], normalize:normalizeTaskForSync }) : null;
+let taskCommitting=false, lastTaskSave=null, tasksCloudSeen=false, tasksRepairedFrom=null, tasksMirrorSigNow="";
+let tasks = taskStore ? taskStore.items().map(migrateTask) : (loadJSON(K_TASKS)||[]).map(migrateTask);
+let tasksFromStore = new Set(tasks.map(t=>t.id));
+/* Rebuild the working copy from the store, keeping any task still being drafted: added with + and not
+   saved yet, so the store never handed it out. A task the store did hand out and no longer has (the
+   pre-upgrade copy replaced by the cloud copy) is dropped, never kept as a draft. */
+function rebuildTasks(){
+  if(!taskStore) return;
+  const drafts=tasks.filter(t=>t && !tasksFromStore.has(t.id) && !taskStore.known(t.id));
+  const fresh=taskStore.items().map(migrateTask);
+  tasksFromStore=new Set(fresh.map(t=>t.id));
+  tasks=drafts.concat(fresh);
+}
+/* Old-format list -> comparable text. Firebase drops empty arrays and nulls, so those are ignored. */
+function taskMirrorSig(list){
+  const keep=v=>v!=null && !(Array.isArray(v)&&!v.length) && !(typeof v==="object"&&!Array.isArray(v)&&!Object.keys(v).length);
+  const clean=t=>Object.fromEntries(Object.keys(t).sort().filter(k=>keep(t[k])).map(k=>[k,t[k]]));
+  return JSON.stringify((Array.isArray(list)?list:Object.values(list||{})).filter(t=>t&&typeof t==="object").map(t=>JSON.stringify(clean(t))).sort());
+}
+/* JSON import: merged into the records (new tasks added, a newer edit in the file wins part by part),
+   never deleting a task the file does not have. */
+function importTaskList(list){
+  if(!taskStore){ tasks=list.map(migrateTask); return; }
+  const withIds=list.filter(t=>t&&typeof t==="object").map(raw=>{ const t=migrateTask(raw); if(!(typeof raw.id==="string"&&raw.id.trim())) t.id=ListSync.stableId(raw,"t-import-"); return t; });
+  taskStore.importLegacy(withIds, { file:true });
+  tasksMirrorSigNow=taskMirrorSig(taskStore.mirror());
+  rebuildTasks();
+}
+if(taskStore) taskStore.subscribe(()=>{
+  if(taskCommitting) return;                       // a local save: its caller re-renders
+  const sig=taskMirrorSig(taskStore.mirror());
+  if(sig===tasksMirrorSigNow){ updateSyncBadge(); return; }   // only a sync status change
+  tasksMirrorSigNow=sig;
+  rebuildTasks(); pushCloud(); updateSyncBadge();
+  if(!editingActive()) render(); else pendingRemoteRender=true;
+});
 let shop = (loadJSON(K_SHOP) || []).map(s=>Object.assign(blankShop(),s));
 let places = (loadJSON(K_PLACES) || []).map(migratePlace);
 let importantDates = (loadJSON(K_DATES) || []).map(migrateImportantDate);
@@ -2311,7 +2391,7 @@ function dueBadge(t){ if(!t.due||isDone(t)) return "";
   return `<span class="due">due ${esc(fmtDate(t.due))}</span>`;
 }
 /* A parked task returns at the start of its selected local calendar day; the task time remains available for scheduling/Up Next and must not delay its return from Later. */
-function normalizeLater(){ let ch=false; const today=todayStr(); tasks.forEach(t=>{ if(isLater(t)&&typeof t.showOn==="string"&&/^\d{4}-\d{2}-\d{2}/.test(t.showOn)&&t.showOn.slice(0,10)<=today){ t.status="todo"; t.showOn=""; ch=true; } }); if(ch) saveTasks(); return ch; }
+function normalizeLater(){ let ch=false; const today=todayStr(); tasks.forEach(t=>{ if(isLater(t)&&typeof t.showOn==="string"&&/^\d{4}-\d{2}-\d{2}/.test(t.showOn)&&t.showOn.slice(0,10)<=today){ t.status="todo"; t.showOn=""; ch=true; } }); if(ch) saveTasks({auto:true}); return ch; }
 
 /* ---------------- linked Family Planner tasks (Daddy) ---------------- */
 /* Same calendar-day rollover rule as normalizeLater(), but derived at display time only — a linked
@@ -4012,10 +4092,10 @@ document.getElementById("importFile").addEventListener("change",e=>{
     /* Every collection is imported independently and only overwritten when present, so backups
        from any prior version — old single-person tasks, no Places, no Important Dates — load fine;
        whatever the file doesn't include is simply left as-is rather than wiped. */
-    if(Array.isArray(d)){ tasks=d.map(migrateTask); }
+    if(Array.isArray(d)){ importTaskList(d); }
     else {
       if(Array.isArray(d.people)) people=d.people;
-      if(Array.isArray(d.tasks)) tasks=d.tasks.map(migrateTask);
+      if(Array.isArray(d.tasks)) importTaskList(d.tasks);   // merged, never deletes
       if(Array.isArray(d.shop)) shop=d.shop.map(s=>Object.assign(blankShop(),s));
       if(Array.isArray(d.places)) places=d.places.map(migratePlace);
       if(Array.isArray(d.importantDates)) importantDates=d.importantDates.map(migrateImportantDate);
