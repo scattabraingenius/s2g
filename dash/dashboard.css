@@ -64,6 +64,20 @@ body.editing [data-card].dragging{opacity:.5;outline-color:var(--signal-dim)}
 .cal-grid .d.out{color:var(--muted-2);opacity:.5}
 .cal-grid .d.today{background:var(--signal-dim);color:var(--paper);font-weight:700}
 
+/* Next deadline */
+.next #nextSource{font-weight:400;color:var(--muted-2)}
+.next #nextSource .warn{color:var(--star)}
+.nx-count{font-size:clamp(34px,4.2vw,60px);font-weight:650;letter-spacing:-.03em;font-variant-numeric:tabular-nums;line-height:1.05;color:var(--signal-dim)}
+.nx-count.due{color:var(--star)}
+.nx-title{font-size:17px;font-weight:600;margin-top:8px;overflow-wrap:anywhere}
+.nx-when{font-size:13px;color:var(--muted);margin-top:3px}
+.nx-empty{font-size:14px;color:var(--muted);padding:6px 0}
+.nx-overdue{margin-top:12px;padding-top:10px;border-top:1px solid var(--line);font-size:13px;color:var(--alarm);overflow-wrap:anywhere}
+
+/* Capture card */
+.capture-card .tile-head a.chip{text-decoration:none}
+.capture-card .cap-text{font-size:15px;min-height:64px}
+
 /* Weather */
 .wx-now{display:flex;align-items:center;gap:14px}
 .wx-temp{font-size:48px;font-weight:300;line-height:1}

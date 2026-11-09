@@ -1,4 +1,4 @@
-const CACHE_NAME = "scattabrain-unified-shell-v5-0c5c07dad539";
+const CACHE_NAME = "scattabrain-unified-shell-v5-c9c465cb6652";
 // Cache Storage is per-origin, not per service-worker scope: /the-grind/ and /s2g/ share one
 // origin (scattabraingenius.github.io), so an unqualified CACHE_NAME could let one site's
 // activate cleanup delete the other site's live cache once their content hashes diverge.
@@ -46,11 +46,25 @@ const APP_SHELL = [
   "./studio/app.js",
   "./dash/",
   "./dash/index.html",
-  "./dash/dashboard.js?v=20261109-dashv2",
-  "./dash/dashboard.css?v=20261109-dashv2",
-  "./dash/usage-widgets.js?v=20261109-dashv2",
-  "./dash/layout.js?v=20261109-dashv2",
-  "./dash/hourly.js?v=20261109-dashv2",
+  "./dash/dashboard.js?v=20261109-vault2",
+  "./dash/dashboard.css?v=20261109-vault2",
+  "./dash/usage-widgets.js?v=20261109-vault2",
+  "./dash/layout.js?v=20261109-vault2",
+  "./dash/hourly.js?v=20261109-vault2",
+  "./dash/next-task.js?v=20261109-vault2",
+  "./capture/",
+  "./capture/index.html",
+  "./capture/manifest.webmanifest",
+  "./capture/capture.css?v=20261109-vault2",
+  "./capture/vault-sync.js?v=20261109-vault2",
+  "./capture/vault-store.js?v=20261109-vault2",
+  "./capture/cloud.js?v=20261109-vault2",
+  "./capture/capture-ui.js?v=20261109-vault2",
+  "./capture/icons/capture-32.png",
+  "./capture/icons/capture-180.png",
+  "./capture/icons/capture-192.png",
+  "./capture/icons/capture-512.png",
+  "./capture/icons/capture-maskable-512.png",
   "./lyrics/icons/lyric-notebook-32.png",
   "./lyrics/icons/lyric-notebook-180.png",
   "./lyrics/icons/lyric-notebook-192.png",
@@ -110,7 +124,7 @@ self.addEventListener("fetch", event => {
         return response;
       }).catch(() =>
         caches.match(request).then(response => response ||
-          (url.pathname.includes("/audio/") ? caches.match("./audio/index.html") : url.pathname.includes("/lyrics/") ? caches.match("./lyrics/index.html") : url.pathname.includes("/mm/") ? caches.match("./mm/index.html") : url.pathname.includes("/dash/") ? caches.match("./dash/index.html") : url.pathname.includes("/studio/") ? caches.match("./studio/index.html") : caches.match("./index.html")))
+          (url.pathname.includes("/audio/") ? caches.match("./audio/index.html") : url.pathname.includes("/lyrics/") ? caches.match("./lyrics/index.html") : url.pathname.includes("/mm/") ? caches.match("./mm/index.html") : url.pathname.includes("/dash/") ? caches.match("./dash/index.html") : url.pathname.includes("/studio/") ? caches.match("./studio/index.html") : url.pathname.includes("/capture/") ? caches.match("./capture/index.html") : caches.match("./index.html")))
       )
     );
     return;

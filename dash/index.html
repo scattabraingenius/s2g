@@ -9,7 +9,8 @@
 <link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png">
 <meta name="application-name" content="SB2G Dashboard">
 <link rel="manifest" href="../manifest.webmanifest">
-<link rel="stylesheet" href="dashboard.css?v=20261109-dashv2">
+<link rel="stylesheet" href="../capture/capture.css?v=20261109-vault2">
+<link rel="stylesheet" href="dashboard.css?v=20261109-vault2">
 </head>
 <body>
 <div class="wrap">
@@ -43,6 +44,16 @@
       <div id="wxBody"></div>
     </section>
 
+    <section class="tile next" data-card="next" aria-label="Next deadline">
+      <div class="tile-head"><span>Next deadline</span><span class="small" id="nextSource"></span></div>
+      <div id="nextBody" aria-live="off"></div>
+    </section>
+
+    <section class="tile capture-card" data-card="capture" aria-label="Capture">
+      <div class="tile-head"><span>Capture <span class="small muted" id="captureCount"></span></span><a class="chip" href="../capture/" title="Open the full capture page">Open</a></div>
+      <div id="dashCapture"></div>
+    </section>
+
     <section class="usage-cc" data-card="usage" aria-label="AI usage">
       <div class="tile-head"><span>AI usage</span><span class="cc-right"><span class="small" id="feedAge" role="status"></span><button class="chip" id="refreshUsage" type="button">Refresh</button></span></div>
       <p class="verdict" id="usageVerdict">Loading usage…</p>
@@ -73,9 +84,14 @@
 
   <p class="foot muted small">Usage comes from CodexBar on the Mac, refreshed about every 5 minutes while it is awake. Weather: Open-Meteo.</p>
 </div>
-<script src="usage-widgets.js?v=20261109-dashv2"></script>
-<script src="layout.js?v=20261109-dashv2"></script>
-<script src="hourly.js?v=20261109-dashv2"></script>
-<script src="dashboard.js?v=20261109-dashv2"></script>
+<script src="usage-widgets.js?v=20261109-vault2"></script>
+<script src="../capture/vault-sync.js?v=20261109-vault2"></script>
+<script src="../capture/vault-store.js?v=20261109-vault2"></script>
+<script src="../capture/cloud.js?v=20261109-vault2"></script>
+<script src="../capture/capture-ui.js?v=20261109-vault2"></script>
+<script src="next-task.js?v=20261109-vault2"></script>
+<script src="layout.js?v=20261109-vault2"></script>
+<script src="hourly.js?v=20261109-vault2"></script>
+<script src="dashboard.js?v=20261109-vault2"></script>
 </body>
 </html>

@@ -40,6 +40,7 @@ function tickClock(){
    drifting setInterval(1000) can. */
 function runClock(){
   tickClock();
+  globalThis.renderNext?.();   // the countdown ticks with the clock (defined further down; absent in tests)
   globalThis.clearTimeout?.(clockTimer);
   clockTimer = globalThis.setTimeout?.(runClock, 1000 - Date.now() % 1000 + 15);
 }
@@ -263,11 +264,60 @@ $('refreshUsage').onclick = () => loadFeed();
 /* Card registry. `frac` is the default width as a share of the row (layout.js turns it into columns
    for whatever screen this is). New cards are added here and appear at the end of saved layouts. */
 const CARDS = [
-  {id:"clock",    title:"Clock",    frac:0.25},
-  {id:"calendar", title:"Calendar", frac:0.25},
-  {id:"weather",  title:"Weather",  frac:0.5},
-  {id:"usage",    title:"AI usage", frac:1},
+  {id:"clock",    title:"Clock",         frac:0.25},
+  {id:"calendar", title:"Calendar",      frac:0.25},
+  {id:"weather",  title:"Weather",       frac:0.5},
+  {id:"next",     title:"Next deadline", frac:0.5},
+  {id:"capture",  title:"Capture",       frac:0.5},
+  {id:"usage",    title:"AI usage",      frac:1},
 ];
+
+/* ---------------- sign-in, Capture card, Next deadline ---------------- */
+/* Same Google sign-in as the main app (reused automatically on this site and browser). The dashboard
+   only READS planner tasks, and only writes Vault records through VaultStore. While signed out, tasks
+   come from this browser's copy (grind.plan.v1), which the main app keeps when it is open here. */
+const vaultStore = globalThis.VaultStore?.create() || null;
+let captureUI = null, tasksRef = null, cloudTasks = null, tasksSource = "none", tasksError = "";
+const cloud = globalThis.GrindCloud?.create({
+  onUser(user){
+    if(tasksRef){ try { tasksRef.off(); } catch {} tasksRef = null; }
+    if(user){
+      vaultStore?.attach(cloud.ref(VaultSync.PATH + user.uid));
+      tasksRef = cloud.plannerRef("tasks");
+      tasksRef.on("value", snap => { const v = snap.val(); cloudTasks = Array.isArray(v) ? v : Object.values(v || {}); tasksSource = "cloud"; tasksError = ""; renderNext(true); },
+        err => { tasksSource = "local"; tasksError = err?.code === "PERMISSION_DENIED" ? "This account can't read The Grind." : "Tasks could not be read."; renderNext(true); });
+    } else {
+      vaultStore?.detach(); cloudTasks = null; tasksSource = "local"; renderNext(true);
+    }
+    captureUI?.refresh();
+  },
+  onConnected(on){ vaultStore?.setOffline(!on); captureUI?.refresh(); },
+  onState(state){ if(state === "unavailable"){ tasksSource = "local"; renderNext(true); } captureUI?.refresh(); },
+}) || null;
+function localTasks(){ try { const v = JSON.parse(localStorage.getItem("grind.plan.v1") || "[]"); return Array.isArray(v) ? v : []; } catch { return []; } }
+let nextHtml = "";
+function renderNext(force){
+  const host = $("nextBody"), N = globalThis.GrindNextTask; if(!host || !N) return;
+  const now = Date.now(), fromCloud = tasksSource === "cloud";
+  const tasks = fromCloud ? cloudTasks : localTasks();
+  const {next, overdue} = N.select(tasks, now);
+  const note = tasksError ? `<span class="warn">${esc(tasksError)}</span>` : fromCloud ? "" : tasks.length ? "From this browser · may be out of date" : "";
+  let html = "";
+  if(next) html += `<div class="nx-count${next.dueNow ? " due" : ""}">${esc(N.countdown(next, now))}</div>
+      <div class="nx-title">${esc(next.task.task || "Untitled task")}</div>
+      <div class="nx-when">${esc(N.whenLabel(next, now))}${next.task.priority ? ` · priority ${esc(next.task.priority)}` : ""}</div>`;
+  else html += `<div class="nx-empty">${tasks.length || fromCloud ? "No upcoming deadlines." : cloud && cloud.state !== "unavailable" && !cloud.user && cloud.authReady ? "Sign in to see your Grind deadlines." : "Your Grind deadlines appear here."}</div>`;
+  if(overdue.length) html += `<div class="nx-overdue">${overdue.length} overdue · oldest: ${esc(overdue[0].task.task || "Untitled task")} (${esc(N.whenLabel(overdue[0], now))})</div>`;
+  $("nextSource").innerHTML = note;
+  if(force || html !== nextHtml){ nextHtml = html; host.innerHTML = html; }
+}
+globalThis.addEventListener?.("storage", e => { if(e.key === "grind.plan.v1" && tasksSource !== "cloud") renderNext(true); });
+if(vaultStore && globalThis.GrindCapture && $("dashCapture").nodeType){
+  /* No entry text on the wall screen (decided 2026-11-09): status and counts only. */
+  captureUI = GrindCapture.mount($("dashCapture"), {store: vaultStore, cloud, recent: 0, rows: 2, draftKey: "dash",
+    onRefresh(){ const n = vaultStore.entries().length; $("captureCount").textContent = n ? `${n} in the Vault` : ""; }});
+}
+cloud?.start();
 /* A card that changes size redraws its own charts. One frame of batching keeps a drag or a span
    change to a single redraw. Kept here rather than in usage-widgets.js, which the Stream Deck plugin
    ships a copy of. */
