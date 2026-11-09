@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png">
 <meta name="application-name" content="SB2G Dashboard">
 <link rel="manifest" href="../manifest.webmanifest">
-<link rel="stylesheet" href="dashboard.css?v=20261106-widgets2">
+<link rel="stylesheet" href="dashboard.css?v=20261108-runway2">
 </head>
 <body>
 <div class="wrap">
@@ -24,7 +24,6 @@
   <main class="grid">
     <section class="tile clock" aria-label="Clock">
       <div class="clock-time" id="clockTime">--:--</div>
-      <div class="clock-date" id="clockDate"></div>
     </section>
 
     <section class="tile cal" aria-label="Calendar">
@@ -38,19 +37,37 @@
       <div id="wxBody"></div>
     </section>
 
-    <section class="wide" aria-label="Quota burn-down">
-      <div class="tile-head"><span>Quota burn-down</span><button class="chip" id="refreshUsage" type="button">Refresh usage</button></div>
-      <div class="widget-grid" id="burnRow"></div>
-    </section>
-    <section class="wide" aria-label="Usage and daily history">
-      <div class="tile-head"><span>Usage & daily history</span><span class="small" id="feedAge" role="status"></span></div>
-      <div class="widget-grid" id="historyRow"></div>
+    <section class="wide usage-cc" aria-label="AI usage">
+      <div class="tile-head"><span>AI usage</span><span class="cc-right"><span class="small" id="feedAge" role="status"></span><button class="chip" id="refreshUsage" type="button">Refresh</button></span></div>
+      <p class="verdict" id="usageVerdict">Loading usage…</p>
+      <div class="cc-bar">
+        <div class="chips" role="group" aria-label="Show provider">
+          <button class="chip" type="button" data-show="both" aria-pressed="true">Both</button>
+          <button class="chip" type="button" data-show="codex" aria-pressed="false">Codex</button>
+          <button class="chip" type="button" data-show="claude" aria-pressed="false">Claude</button>
+        </div>
+        <span class="small muted">Weekly quota left, on one clock</span>
+      </div>
+      <div class="runway-wrap" id="runwayWrap"><div id="runway"></div><div class="tip" id="runwayTip" hidden></div></div>
+      <div class="legend" id="runwayLegend"></div>
+      <div class="prov-grid" id="usageTiles"></div>
+      <ul class="insights" id="usageInsights" aria-label="Usage insights"></ul>
+      <details class="more" id="usageDaily">
+        <summary>Quota spent per day</summary>
+        <div id="dailyChart"></div>
+        <p class="note">Percentage points of each provider's own weekly quota, from the stored samples, by local day. Dashed line: what you can spend per day from now until reset. Faded bars are partial days.</p>
+      </details>
+      <details class="more" id="usageLogs">
+        <summary>Local log activity (API-price estimates)</summary>
+        <div id="tokenChart"></div>
+        <p class="note">Tokens from Codex CLI and Claude Code logs on the Mac only. Claude web, desktop and phone chats are not in these logs but do count against Claude's quota. Dollar figures are list-price estimates, not bills. A dot means no log that day, not zero.</p>
+      </details>
     </section>
   </main>
 
   <p class="foot muted small">Usage comes from CodexBar on the Mac, refreshed about every 5 minutes while it is awake. Weather: Open-Meteo.</p>
 </div>
-<script src="usage-widgets.js?v=20261106-widgets2"></script>
-<script src="dashboard.js?v=20261106-widgets2"></script>
+<script src="usage-widgets.js?v=20261108-runway2"></script>
+<script src="dashboard.js?v=20261108-runway2"></script>
 </body>
 </html>
