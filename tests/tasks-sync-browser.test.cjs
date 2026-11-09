@@ -172,6 +172,53 @@ scenario("importing a backup file merges tasks and never deletes newer ones", as
   await ctx.close();
 });
 
+scenario("a task being drafted with + survives a change synced from another tab, and is not sent until saved", async ({ browser, base }) => {
+  const fb = createBackend(); fb.set(NODE, seedPlanner());
+  const ctx = await device(browser, fb);
+  const a = await open(ctx, base), b = await open(ctx, base);
+  await signedInAndLoaded(a); await signedInAndLoaded(b); await firstSnapshot(a); await firstSnapshot(b);
+  await a.evaluate(() => document.getElementById("addBtn").click());
+  const draftId = await a.evaluate(() => editingId);
+  assert.ok(draftId, "editor open on a new draft");
+  await quickAdd(b, "FROM THE OTHER TAB");
+  await waitFor(async () => (await names(a)).includes("FROM THE OTHER TAB"), 5000, "other tab's task arrives");
+  assert.ok(await a.evaluate(id => tasks.some(t => t.id === id), draftId), "draft still there");
+  const acct = fb.read(NODE + "/tasksSync/accounts/" + OWNER.uid);
+  assert.ok(!Object.values(acct.records).some(r => r.id === draftId), "an unsaved draft is not in the cloud");
+  await a.evaluate(() => { document.querySelector(".editor input[type=text]").value = "DRAFT SAVED"; document.querySelector(".editor .save-e").click(); });
+  await waitFor(() => cloud(fb).records.includes("DRAFT SAVED"), 4000, "saved draft synced");
+  await ctx.close();
+});
+
+scenario("Delete completed: the done tasks stay deleted after reloading and in the dashboard's copy", async ({ browser, base }) => {
+  const fb = createBackend(); fb.set(NODE, { ...seedPlanner(), tasks: [task("t-old", "old task"), task("t-d1", "done one", { status: "done" }), task("t-d2", "done two", { status: "done" })] });
+  const ctx = await device(browser, fb);
+  let page = await open(ctx, base); await signedInAndLoaded(page); await firstSnapshot(page);
+  await page.evaluate(() => document.getElementById("deleteCompletedBtn").click());
+  await waitFor(() => JSON.stringify(cloud(fb).records) === JSON.stringify(["old task"]), 4000, "deletes synced");
+  await waitFor(() => JSON.stringify(cloud(fb).mirror) === JSON.stringify(["old task"]), 4000, "mirror updated");
+  await page.close();
+  page = await open(ctx, base); await signedInAndLoaded(page); await settle(600);
+  assert.deepEqual(await names(page), ["old task"]);
+  await ctx.close();
+});
+
+scenario("main app opened offline from the cache still saves tasks through the task store", async ({ browser, base }) => {
+  const fb = createBackend(); fb.set(NODE, seedPlanner());
+  const ctx = await browser.newContext({ serviceWorkers: "allow" }); await fb.install(ctx, { user: OWNER });
+  const page = await open(ctx, base);
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  await waitFor(() => page.evaluate(async () => !!(await caches.match(new URL("sync/list-store.js?v=20261109-tasks2", location.href).href))), 8000, "offline cache filled");
+  await page.reload(); await waitFor(() => page.evaluate(() => !!navigator.serviceWorker.controller), 5000, "controlled");
+  await ctx.route("https://www.gstatic.com/**", r => r.abort());
+  await ctx.setOffline(true);
+  await page.reload();
+  assert.equal(await page.evaluate(() => typeof taskStore !== "undefined" && !!taskStore), true, "task store loaded from the cache");
+  await quickAdd(page, "NO SIGNAL TASK");
+  assert.ok(await page.evaluate(() => Object.keys(localStorage).some(k => k.startsWith("grind.tasks.pending."))), "written as a pending change");
+  await ctx.close();
+});
+
 /* Upgrade rule (decided 2026-11-09): data from before Tasks Sync v2 follows the old rule once, the
    cloud copy wins, so a device that was not opened for a while cannot bring back tasks deleted
    elsewhere. A device that never signs in keeps its own list. */

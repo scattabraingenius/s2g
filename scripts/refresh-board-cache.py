@@ -4,7 +4,7 @@ import hashlib, re
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 paths = [ROOT/'index.html',ROOT/'mm/index.html']
-for folder in ('lyrics','audio','dash','studio','capture'):
+for folder in ('lyrics','audio','dash','studio','capture','sync'):
     paths += [p for p in (ROOT/folder).rglob('*') if p.is_file() and p.suffix in ('.html','.css','.js','.webmanifest','.png')]
 digest = hashlib.sha256()
 for p in sorted(paths):
