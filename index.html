@@ -577,6 +577,10 @@
   .vault-row-actions { display:flex; gap:4px; justify-content:flex-end; }
   .vault-fav, .vault-copy, .vault-del { color:var(--muted-2); background:none; border:none; cursor:pointer; font-size:13px; padding:2px 4px; line-height:1; }
   .vault-fav.on { color:var(--star); }
+  .vault-status { font-size:11.5px; color:var(--muted); min-height:16px; }
+  .vault-status.warn { color:var(--star); } .vault-status.bad { color:var(--alarm); }
+  .vault-row.deleted .vault-text { color:var(--muted); }
+  .vault-restore { font:inherit; font-size:11.5px; color:var(--signal-dim); background:none; border:1px solid var(--line); border-radius:6px; cursor:pointer; padding:2px 8px; }
   .vault-fav:hover { color:var(--ink); } .vault-copy:hover { color:var(--signal-dim); } .vault-del:hover { color:var(--alarm); }
 
   /* bills (mirrors places to go) */
@@ -948,6 +952,7 @@
             <input type="text" id="vaultSource" placeholder="Source / author (optional)" aria-label="Source or author">
             <button class="btn add" id="vaultAddBtn">Add</button>
           </div>
+          <div class="vault-status" id="vaultStatus" role="status" aria-live="polite"></div>
         </div>
         <div class="vault-controls">
           <input type="text" id="vaultSearch" class="search" placeholder="Search the Vault…" aria-label="Search the Vault">
@@ -957,6 +962,7 @@
             <option value="quote">Quotes</option>
             <option value="idea">Ideas</option>
             <option value="favorites">Favorites</option>
+            <option value="deleted">Recently deleted</option>
           </select>
         </div>
         <div class="vault-list" id="vaultList"></div>
@@ -1083,6 +1089,8 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="capture/vault-sync.js?v=20261109-vault2"></script>
+<script src="capture/vault-store.js?v=20261109-vault2"></script>
 <script>
 "use strict";
 const VERSION = "1.2-beta";
@@ -1272,7 +1280,7 @@ function saveBYLTitle(){ try{ localStorage.setItem(K_BYL_TITLE, JSON.stringify(b
    built-in catalog's own content (word/pronunciation/definition/example) is never duplicated
    into storage or synced, per "do not synchronize the built-in vocabulary catalog unnecessarily". */
 function saveWords(){ try{ localStorage.setItem(K_WORDS, JSON.stringify(words)); }catch(e){} pushCloud(); }
-function saveVault(){ try{ localStorage.setItem(K_VAULT, JSON.stringify(vault)); }catch(e){} pushCloud(); }
+function saveVault(){ if(!vaultStore){ try{ localStorage.setItem(K_VAULT, JSON.stringify(vault)); }catch(e){} } pushCloud(); }   // fallback only: with VaultStore every change goes through it
 /* Which profiles are currently "in focus" — a device-local display preference (like view prefs),
    never synced through Firebase and never included in import/export. A missing or malformed
    value defaults to every real profile enabled; a saved empty array is a deliberate "none". */
@@ -1360,7 +1368,8 @@ function attachCloud(){
     db=firebase.database().ref("planners/"+APP_ID);
     syncing=true;
     db.on("value", applyGrindSnapshot, onCloudError);
-    firebase.database().ref(".info/connected").on("value", s=>{ cloudConnected = s.val()===true; if(syncing) updateSyncBadge(); });
+    firebase.database().ref(".info/connected").on("value", s=>{ cloudConnected = s.val()===true; if(syncing) updateSyncBadge(); if(vaultStore) vaultStore.setOffline(!cloudConnected); renderVaultStatus(); });
+    if(vaultStore && typeof VaultSync!=="undefined") vaultStore.attach(firebase.database().ref(VaultSync.PATH + authUser.uid));
     attachFamilyLink();
   }catch(e){ syncing=false; updateSyncBadge(); }
 }
@@ -1368,6 +1377,7 @@ function detachCloud(){
   try{ if(db) db.off(); }catch(e){}
   clearTimeout(pushTimer);
   db=null; syncing=false; remoteApplying=false; cloudConnected=false;
+  if(vaultStore) vaultStore.detach();
   detachFamilyLink();
 }
 /* A read failure must NEVER be mistaken for "the cloud is empty" — that path seeds the cloud from
@@ -1421,7 +1431,15 @@ function applyGrindSnapshot(snap){
       { const x=listOrEmpty(v.beforeYouLeave,migrateBYLItem); if(x) beforeYouLeave=x.filter(b=>b.item!==""); }
       if(typeof v.beforeYouLeaveTitle==="string" && v.beforeYouLeaveTitle.trim()!=="") bylTitle=normalizeBYLTitle(v.beforeYouLeaveTitle);  // malformed/blank remote titles must never overwrite the local title
       { const x=listOrEmpty(v.words,migrateWordEntry); if(x) words=x.filter(Boolean); }
-      { const x=listOrEmpty(v.vault,migrateVaultEntry); if(x) vault=x.filter(Boolean); }
+      let vaultMirrorStale=false;
+      if(vaultStore){
+        if(Array.isArray(v.vault)) vaultStore.importLegacy(v.vault);   // union only: never replaces or deletes
+        /* An older tab may have pushed its stale whole array. The records above are untouched by that,
+           but repair the old-format mirror so older tabs and exports see the real Vault again. */
+        const sig=list=>(Array.isArray(list)?list:[]).map(e=>e&&e.id+":"+e.updated).sort().join("|");
+        vault=vaultStore.entries(); vaultMirrorStale = sig(v.vault)!==sig(vault);
+      }
+      else { const x=listOrEmpty(v.vault,migrateVaultEntry); if(x) vault=x.filter(Boolean); }
       { const x=listOrEmpty(v.otherGrindSessions,ogMigrateSession); if(x) ogSessions=x.filter(Boolean).sort((a,b)=>a.startTimestamp-b.startTimestamp); }
       /* The active session is the one field where ABSENCE can't mean "leave it alone": stopping a
          session on another device has to be able to clear this one. Hence the explicit
@@ -1435,7 +1453,7 @@ function applyGrindSnapshot(snap){
       // guard exactly like any other local change — never bypassing it, never firing while a remote
       // snapshot is still being applied, and (since ensureGrindDaddyProfile is idempotent and the
       // next snapshot will already contain Daddy) never looping.
-      if(daddyRepaired) pushCloud();
+      if(daddyRepaired || vaultMirrorStale) pushCloud();
       // Data is always safe to merge in (every commit path re-fetches its entity by id), but a full render()
       // would blow away a focused inline editor's DOM — so defer the redraw until editing ends.
       if(!editingActive()) render(); else pendingRemoteRender=true;
@@ -1886,7 +1904,23 @@ const bylRaw = loadJSON(K_BYL);
 let beforeYouLeave = (Array.isArray(bylRaw) ? bylRaw : []).map(migrateBYLItem).filter(b=>b.item!=="");
 let bylTitle = normalizeBYLTitle(loadJSON(K_BYL_TITLE));
 let words = loadWords();
-let vault = loadVault();
+/* THE VAULT is stored by VaultStore (capture/vault-store.js), shared with the capture page and the
+   dashboard: one record per entry, every change written to its own localStorage key before the UI
+   says it is saved, and synced to vaultSync/accounts/<uid> with merging transactions. `vault` below
+   is only a read-only projection for rendering, printing and the old-format mirror; it must never be
+   assigned from a cloud snapshot again (that is what used to wipe offline and signed-out captures).
+   Entries saved before Vault Sync v2 (grind.vault.v1) are imported once; importing never deletes. */
+const vaultStore = (typeof VaultStore!=="undefined") ? VaultStore.create() : null;
+if(vaultStore) vaultStore.importLegacy(loadJSON(K_VAULT));
+let vault = vaultStore ? vaultStore.entries() : loadVault();
+let vaultSig = JSON.stringify(vault);
+if(vaultStore) vaultStore.subscribe(()=>{
+  vault = vaultStore.entries();
+  const sig = JSON.stringify(vault);
+  if(sig !== vaultSig){ vaultSig = sig; pushCloud(); }   // keeps the old-format `vault` mirror current for older tabs
+  if(!editingActive()) renderVault(); else pendingRemoteRender=true;
+  renderVaultStatus();
+});
 let settings = Object.assign({ soundEnabled:true }, loadJSON(K_SETTINGS)||{});
 
 /* =====================================================================
@@ -3268,21 +3302,37 @@ function saveWordModal(){
 function sortedFilteredVault(){
   const q=document.getElementById("vaultSearch").value.trim().toLowerCase();
   const filter=document.getElementById("vaultFilter").value;
-  let list=[...vault];
+  let list = filter==="deleted" ? (vaultStore ? vaultStore.deleted() : []) : [...vault];
   if(filter==="favorites") list=list.filter(v=>v.favorite);
   else if(VAULT_TYPES.includes(filter)) list=list.filter(v=>v.type===filter);
   if(q) list=list.filter(v=>[v.text,v.source,v.type].join(" ").toLowerCase().includes(q));
-  list.sort((a,b)=> ((b.favorite?1:0)-(a.favorite?1:0)) || ((b.updated||0)-(a.updated||0)));
+  if(filter!=="deleted") list.sort((a,b)=> ((b.favorite?1:0)-(a.favorite?1:0)) || ((b.updated||0)-(a.updated||0)));
   return list;
 }
 function renderVault(){
   const el=document.getElementById("vaultList"); if(!el) return;
-  const list=sortedFilteredVault();
-  if(!vault.length) el.innerHTML=`<div class="empty-state" style="padding:24px 12px"><div class="big">The Vault is empty.</div>Save a bar, quote, or idea above.</div>`;
+  const list=sortedFilteredVault(), deletedView=document.getElementById("vaultFilter").value==="deleted";
+  if(deletedView && !list.length) el.innerHTML=`<div class="empty-state" style="padding:24px 12px"><div class="big">Nothing deleted.</div>Deleted entries wait here so you can restore them.</div>`;
+  else if(!vault.length && !deletedView) el.innerHTML=`<div class="empty-state" style="padding:24px 12px"><div class="big">The Vault is empty.</div>Save a bar, quote, or idea above.</div>`;
   else if(!list.length) el.innerHTML=`<div class="empty-state" style="padding:24px 12px"><div class="big">Nothing here.</div>Try another filter or search.</div>`;
   else el.innerHTML="";
-  list.forEach(v=>el.appendChild(renderVaultRow(v)));
+  list.forEach(v=>el.appendChild(deletedView ? renderDeletedVaultRow(v) : renderVaultRow(v)));
   document.getElementById("vaultCount").textContent = vault.length ? String(vault.length) : "";
+  renderVaultStatus();
+}
+/* One honest line under the capture box: saved on this device versus confirmed by the server. */
+let vaultLastSave=null;   // {id, durable}
+function renderVaultStatus(){
+  const el=document.getElementById("vaultStatus"); if(!el) return;
+  const put=(text,cls)=>{ el.textContent=text; el.className="vault-status"+(cls?" "+cls:""); };
+  if(!vaultStore) return put("The Vault couldn't load its save module. Reload the page before adding anything.","bad");
+  const st=vaultStore.status(), n=st.pending, unsent=n?` · ${n} not yet synced`:"";
+  if(vaultLastSave && !vaultLastSave.durable && vaultStore.isPending(vaultLastSave.id)) return put("Not saved on this device (storage is full or blocked). Copy your text before closing this page.","bad");
+  if(!authUser) return put(n ? `Saved on this device only${unsent}. Sign in to sync.` : "Signed out: new entries are saved on this device until you sign in.", n?"warn":"");
+  if(st.cloud==="error") return put(`Sync problem (${st.error}). Your entries are safe on this device${unsent}.`,"warn");
+  if(n) return put(`Saved on this device${unsent}${st.cloud==="offline"||!cloudConnected?" (offline)":""}.`,"warn");
+  if(st.cloud==="synced") return put("All entries synced"+(st.lastSynced?` · ${new Date(st.lastSynced).toLocaleTimeString([], {hour:"numeric", minute:"2-digit"})}`:"")+".");
+  put("Syncing…");
 }
 function wireInlineVaultText(node, vaultId){
   node.classList.add("editable"); node.tabIndex=0; node.setAttribute("role","button"); node.setAttribute("aria-label","Edit entry");
@@ -3290,7 +3340,7 @@ function wireInlineVaultText(node, vaultId){
     if(isEditingField("vault",vaultId,"text")) return;
     const v=vault.find(x=>x.id===vaultId); if(!v) return;
     startInlineText({ type:"vault", id:vaultId, field:"text", container:node, value:v.text, required:true, multiline:true, shiftEnterNewline:true, ariaLabel:"Entry text",
-      getEntity:()=>vault.find(x=>x.id===vaultId), onCommit:(entity,val)=>{ entity.text=val; entity.updated=Date.now(); saveVault(); }, onDone:renderVault });
+      getEntity:()=>vault.find(x=>x.id===vaultId), onCommit:(entity,val)=>{ if(vaultStore) vaultStore.edit(vaultId,{text:val}); else { entity.text=val; entity.updated=Date.now(); saveVault(); } }, onDone:renderVault });
   }
   node.addEventListener("click",open);
   node.addEventListener("keydown",e=>{ if(e.target!==node) return; if(e.key==="Enter"||e.key===" "){ e.preventDefault(); open(); } });
@@ -3301,6 +3351,7 @@ function renderVaultRow(v){
     <div class="vault-row-head">
       <span class="vault-type-badge type-${v.type}">${esc(v.type)}</span>
       ${v.source?`<span class="vault-source">${esc(v.source)}</span>`:""}
+      ${vaultStore&&vaultStore.isPending(v.id)?`<span class="vault-source" title="Saved on this device, not yet confirmed by the cloud">● not yet synced</span>`:""}
       <span class="vault-date">${esc(fmtWhen(v.updated||v.created||Date.now()))}</span>
     </div>
     <div class="vault-text editable" id="vr-text" tabindex="0" role="button" aria-label="Edit entry">${esc(v.text)}</div>
@@ -3310,9 +3361,22 @@ function renderVaultRow(v){
       <button class="vault-del" title="Delete">✕</button>
     </div>`;
   wireInlineVaultText(row.querySelector("#vr-text"), v.id);
-  row.querySelector(".vault-fav").addEventListener("click",()=>{ const cur=vault.find(x=>x.id===v.id); if(!cur) return; cur.favorite=!cur.favorite; cur.updated=Date.now(); saveVault(); renderVault(); });
+  row.querySelector(".vault-fav").addEventListener("click",()=>{ const cur=vault.find(x=>x.id===v.id); if(!cur) return; if(vaultStore) vaultStore.edit(v.id,{favorite:!cur.favorite}); else { cur.favorite=!cur.favorite; cur.updated=Date.now(); saveVault(); renderVault(); } });
   row.querySelector(".vault-copy").addEventListener("click",()=>{ try{ const p=navigator.clipboard&&navigator.clipboard.writeText(v.text); if(p&&p.catch) p.catch(()=>{}); }catch(e){} });
-  row.querySelector(".vault-del").addEventListener("click",()=>{ if(confirm("Delete this Vault entry?")){ vault=vault.filter(x=>x.id!==v.id); saveVault(); renderVault(); } });
+  row.querySelector(".vault-del").addEventListener("click",()=>{ if(confirm("Delete this Vault entry? You can restore it from Recently deleted.")){ if(vaultStore) vaultStore.remove(v.id); else { vault=vault.filter(x=>x.id!==v.id); saveVault(); renderVault(); } } });
+  return row;
+}
+function renderDeletedVaultRow(v){
+  const row=document.createElement("div"); row.className="vault-row deleted"; row.dataset.id=v.id;
+  row.innerHTML=`
+    <div class="vault-row-head">
+      <span class="vault-type-badge type-${v.type}">${esc(v.type)}</span>
+      ${v.source?`<span class="vault-source">${esc(v.source)}</span>`:""}
+      <span class="vault-date">Deleted ${esc(fmtWhen(v.updated||Date.now()))}</span>
+    </div>
+    <div class="vault-text">${esc(v.text)}</div>
+    <div class="vault-row-actions"><button class="vault-restore" type="button">Restore</button></div>`;
+  row.querySelector(".vault-restore").addEventListener("click",()=>{ if(vaultStore) vaultStore.restore(v.id); });
   return row;
 }
 function addVaultEntry(){
@@ -3321,11 +3385,14 @@ function addVaultEntry(){
   if(!text) return;
   const type=document.getElementById("vaultType").value;
   const source=document.getElementById("vaultSource").value.trim();
-  const v=blankVaultEntry(text, type);
-  v.source=source;
-  vault.unshift(v);
-  input.value=""; document.getElementById("vaultSource").value="";
-  saveVault(); renderVault();
+  if(!vaultStore){ renderVaultStatus(); return; }
+  /* add() has written the entry to localStorage before it returns. If storage refused, the text
+     stays in the box (the store still tries the cloud) and the status line says so. */
+  const res=vaultStore.add({ text, type, source });
+  if(!res.ok) return;
+  vaultLastSave={ id:res.id, durable:res.durable };
+  if(res.durable){ input.value=""; document.getElementById("vaultSource").value=""; }
+  vault=vaultStore.entries(); renderVault();
 }
 document.getElementById("vaultInput").addEventListener("keydown",e=>{
   if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); addVaultEntry(); }
@@ -3960,7 +4027,7 @@ document.getElementById("importFile").addEventListener("change",e=>{
       if(Array.isArray(d.beforeYouLeave)) beforeYouLeave=d.beforeYouLeave.map(migrateBYLItem).filter(b=>b.item!=="");
       if(typeof d.beforeYouLeaveTitle==="string" && d.beforeYouLeaveTitle.trim()!=="") bylTitle=normalizeBYLTitle(d.beforeYouLeaveTitle);
       if(Array.isArray(d.words)) words=d.words.map(migrateWordEntry).filter(Boolean);
-      if(Array.isArray(d.vault)) vault=d.vault.map(migrateVaultEntry).filter(Boolean);
+      if(Array.isArray(d.vault)){ if(vaultStore) vaultStore.importLegacy(d.vault); else vault=d.vault.map(migrateVaultEntry).filter(Boolean); }   // merged, never replaces
       if(Array.isArray(d.otherGrindSessions)) ogSessions=d.otherGrindSessions.map(ogMigrateSession).filter(Boolean).sort((a,b)=>a.startTimestamp-b.startTimestamp);
       if(d.otherGrindSettings && typeof d.otherGrindSettings==="object"){ const wh=Number(d.otherGrindSettings.wakingHours); if(Number.isFinite(wh)&&wh>0&&wh<=24) ogSettings.wakingHours=wh; }
       /* d.otherGrindActive is intentionally ignored — see the export comment above. */

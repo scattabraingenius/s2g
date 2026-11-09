@@ -1,0 +1,33 @@
+/* The capture box (capture-ui.js), used on /capture/ and in the dashboard's Capture card.
+   Uses the shared tokens: --paper --card --surface-2 --line --ink --muted --muted-2 --signal
+   --signal-dim --good --star --alarm. */
+.cap{display:flex;flex-direction:column;gap:10px;min-width:0}
+.cap .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.cap-text{font:inherit;font-size:16px;line-height:1.45;width:100%;min-height:84px;resize:vertical;padding:12px 14px;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:14px;outline:none}
+.cap-text:focus{border-color:var(--signal-dim);box-shadow:0 0 0 3px color-mix(in srgb,var(--signal),transparent 75%)}
+.cap-text::placeholder{color:var(--muted-2)}
+.cap-row{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.cap-types{display:flex;gap:6px}
+.cap-type,.cap-save,.cap-signin{font:inherit;font-size:13px;border-radius:999px;cursor:pointer;padding:6px 14px;border:1px solid var(--line);background:var(--surface-2);color:var(--muted)}
+.cap-type[aria-pressed="true"]{color:var(--ink);border-color:var(--signal-dim);background:color-mix(in srgb,var(--signal),transparent 80%)}
+.cap-save{color:var(--paper);background:var(--signal-dim);border-color:var(--signal-dim);font-weight:650;padding:6px 18px}
+.cap-signin{color:var(--ink)}
+.cap-type:focus-visible,.cap-save:focus-visible,.cap-signin:focus-visible,.cap-more summary:focus-visible{outline:2px solid var(--signal-dim);outline-offset:2px}
+.cap-more summary{cursor:pointer;font-size:12px;color:var(--muted);list-style:none;width:max-content}
+.cap-more summary::-webkit-details-marker{display:none}
+.cap-more summary::before{content:"▸ ";color:var(--muted-2)} .cap-more[open] summary::before{content:"▾ "}
+.cap-source{font:inherit;font-size:14px;width:100%;margin-top:6px;padding:8px 12px;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:10px}
+.cap-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;min-height:28px}
+.cap-status{margin:0;font-size:13px;color:var(--muted)}
+.cap-status.good{color:var(--good)} .cap-status.warn{color:var(--star)} .cap-status.bad{color:var(--alarm);font-weight:600}
+.cap-status.good::before{content:"✓ "}
+.cap-err{font-size:12px;color:var(--alarm)}
+.cap-recent-title{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted-2);margin:14px 0 0}
+.cap-recent{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.cap-entry{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:baseline;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:9px 12px;font-size:14px}
+.cap-entry-text{white-space:pre-wrap;overflow-wrap:anywhere;min-width:0}
+.cap-entry-meta{font-size:11.5px;color:var(--muted-2);white-space:nowrap}
+.cap-dot{color:var(--star)}
+.cap-empty{font-size:13px;color:var(--muted);padding:8px 2px}
+.cap-badge{font-family:var(--mono,monospace);font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:2px 7px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+.cap-badge.type-bar{color:#3B97E6;border-color:#3B97E6} .cap-badge.type-quote{color:var(--signal-dim);border-color:var(--signal)} .cap-badge.type-idea{color:#F2A81D;border-color:#F2A81D}

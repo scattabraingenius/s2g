@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0C0812">
+<title>Capture</title>
+<meta name="application-name" content="Grind Capture">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="./icons/capture-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="./icons/capture-180.png">
+<link rel="stylesheet" href="capture.css?v=20261109-vault2">
+<style>
+:root{
+  --paper:#0C0812; --card:#17111F; --surface-2:#221934; --line:#372950;
+  --ink:#EDE7F6; --muted:#A599BF; --muted-2:#786A93;
+  --signal:#A855F7; --signal-dim:#C9A6FF; --star:#F2C14E; --alarm:#F0575C; --good:#4FC48A;
+  --mono: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color-scheme: dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans)}
+body{min-height:100vh;-webkit-font-smoothing:antialiased}
+.wrap{max-width:640px;margin:0 auto;padding:max(18px,env(safe-area-inset-top)) 16px 32px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px}
+.eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--signal-dim)}
+h1{margin:2px 0 0;font-size:24px;font-weight:700;letter-spacing:-.01em}
+.links{display:flex;gap:14px;font-size:14px}
+.links a{color:var(--muted);text-decoration:none} .links a:hover{color:var(--ink)}
+.cap-text{min-height:120px;font-size:17px}
+.note{margin-top:22px;font-size:12px;color:var(--muted-2);line-height:1.5}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div><div class="eyebrow">SB2G</div><h1>Capture</h1></div>
+    <nav class="links"><a href="../">Vault</a><a href="../dash/">Dashboard</a></nav>
+  </header>
+  <main id="capture"></main>
+  <p class="note">Entries go to the Vault in The Grind. Each one is saved on this device the moment you press Enter, then synced when you are signed in and online.</p>
+</div>
+<script src="vault-sync.js?v=20261109-vault2"></script>
+<script src="vault-store.js?v=20261109-vault2"></script>
+<script src="cloud.js?v=20261109-vault2"></script>
+<script src="capture-ui.js?v=20261109-vault2"></script>
+<script>
+"use strict";
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("../service-worker.js").catch(() => {});
+const store = VaultStore.create();
+let ui = null;
+const cloud = GrindCloud.create({
+  onUser(user) {
+    if (user) store.attach(cloud.ref(VaultSync.PATH + user.uid)); else store.detach();
+    ui && ui.refresh();
+  },
+  onConnected(on) { store.setOffline(!on); ui && ui.refresh(); },
+  onState() { ui && ui.refresh(); },
+});
+ui = GrindCapture.mount(document.getElementById("capture"), { store, cloud, recent: 10, autofocus: true, rows: 4, draftKey: "page" });
+cloud.start();
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { ui.focus(); if (cloud.user) store.sync(); } });
+</script>
+</body>
+</html>
