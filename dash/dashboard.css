@@ -30,18 +30,18 @@ h1{margin:2px 0 0;font-size:28px;font-weight:700;letter-spacing:-.01em}
 .chip:hover{color:var(--ink)}
 
 /* Clock */
-.clock{display:flex;flex-direction:column;justify-content:center}
-.clock-time{font-size:56px;font-weight:300;letter-spacing:-.03em;font-variant-numeric:tabular-nums;line-height:1}
-.clock-time .ampm{font-size:18px;font-weight:500;color:var(--muted);margin-left:6px;letter-spacing:0}
-.clock-date{margin-top:10px;color:var(--signal-dim);font-size:15px;font-weight:600}
+/* The clock fills its tile: the time scales with the tile's own width and height. */
+.clock{display:flex;align-items:center;justify-content:center;container-type:size;padding:12px 14px}
+.clock-time{font-size:56px;font-size:min(30cqw,80cqh);font-weight:650;letter-spacing:-.035em;font-variant-numeric:tabular-nums;line-height:.9;white-space:nowrap}
+.clock-time .ampm{font-size:.26em;font-weight:500;color:var(--muted);margin-left:.12em;letter-spacing:0}
 
 /* Calendar */
-.cal .tile-head span{color:var(--alarm);text-transform:uppercase;letter-spacing:.06em;font-size:12px}
+.cal .tile-head span{color:var(--signal-dim);text-transform:uppercase;letter-spacing:.06em;font-size:12px}
 .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center;font-size:12px;font-variant-numeric:tabular-nums}
 .cal-grid .dow{color:var(--muted-2);font-size:10px;font-weight:700;padding-bottom:3px}
 .cal-grid .d{padding:3px 0;border-radius:999px}
 .cal-grid .d.out{color:var(--muted-2);opacity:.5}
-.cal-grid .d.today{background:var(--alarm);color:#fff;font-weight:700}
+.cal-grid .d.today{background:var(--signal-dim);color:var(--paper);font-weight:700}
 
 /* Weather */
 .wx-now{display:flex;align-items:center;gap:14px}
@@ -100,7 +100,6 @@ h1{margin:2px 0 0;font-size:28px;font-weight:700;letter-spacing:-.01em}
 @media (max-width:560px){
   .grid{grid-template-columns:minmax(0,1fr)}
   .weather,.usage{grid-column:auto}
-  .clock-time{font-size:48px}
 }
 
 

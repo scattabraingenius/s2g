@@ -27,7 +27,6 @@ function tickClock(){
   const now = new Date();
   const [hm, ampm] = now.toLocaleTimeString([], {hour:"numeric", minute:"2-digit"}).split(" ");
   $("clockTime").innerHTML = esc(hm) + (ampm ? `<span class="ampm">${esc(ampm)}</span>` : "");
-  $("clockDate").textContent = now.toLocaleDateString([], {weekday:"long", month:"long", day:"numeric"});
   const day = now.toDateString();
   if(day !== calDay){ calDay = day; renderCalendar(now); }
 }
