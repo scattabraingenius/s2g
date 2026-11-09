@@ -22,13 +22,26 @@ const DEFAULT_PLACE = {name:"Troy, MI", lat:42.606, lon:-83.150};
 const validPlace = p => p && typeof p.name === "string" && Number.isFinite(p.lat) && Number.isFinite(p.lon) && Math.abs(p.lat) <= 90 && Math.abs(p.lon) <= 180;
 
 /* ---------------- clock + calendar ---------------- */
-let calDay = "";
+let calDay = "", clockTimer = null;
+/* Hours and minutes stay the hero; seconds and AM/PM are smaller and dimmer beside them. */
+const CLOCK_FMT = new Intl.DateTimeFormat([], {hour:"numeric", minute:"2-digit", second:"2-digit"});
+function clockHtml(now){
+  const parts = CLOCK_FMT.formatToParts(now), part = type => parts.find(p => p.type === type)?.value || "";
+  const ampm = part("dayPeriod");
+  return `${esc(part("hour"))}:${esc(part("minute"))}<span class="sec">:${esc(part("second"))}</span>` + (ampm ? `<span class="ampm">${esc(ampm)}</span>` : "");
+}
 function tickClock(){
   const now = new Date();
-  const [hm, ampm] = now.toLocaleTimeString([], {hour:"numeric", minute:"2-digit"}).split(" ");
-  $("clockTime").innerHTML = esc(hm) + (ampm ? `<span class="ampm">${esc(ampm)}</span>` : "");
+  $("clockTime").innerHTML = clockHtml(now);
   const day = now.toDateString();
   if(day !== calDay){ calDay = day; renderCalendar(now); }
+}
+/* Re-armed just after each whole second, so the display never visibly skips a second the way a
+   drifting setInterval(1000) can. */
+function runClock(){
+  tickClock();
+  globalThis.clearTimeout?.(clockTimer);
+  clockTimer = globalThis.setTimeout?.(runClock, 1000 - Date.now() % 1000 + 15);
 }
 function renderCalendar(now){
   $("calMonth").textContent = now.toLocaleDateString([], {month:"long", year:"numeric"});
@@ -53,7 +66,9 @@ const WMO = [[0,"☀️","Clear"],[1,"🌤️","Mostly clear"],[2,"⛅","Partly 
 const wmo = code => { const m = WMO.find(w => w[0] === code) || [0,"🌡️","—"]; return {icon:m[1], text:m[2]}; };
 const units = () => prefs.units === "c" ? "c" : "f";
 
+let wxSetupOpen = false;
 function weatherSetup(msg){
+  wxSetupOpen = true;
   $("wxPlace").textContent = "Weather";
   $("wxBody").innerHTML = `<div class="wx-setup">${msg ? `<span>${esc(msg)}</span>` : ""}
     <button type="button" id="wxLocate">Use my location</button>
@@ -74,26 +89,78 @@ function weatherSetup(msg){
     } catch { weatherSetup("Could not reach the weather service."); }
   };
 }
+/* The last forecast is kept so the hourly slots and strip can move on every minute without a new
+   request; the forecast itself is refetched every 30 minutes. */
+let lastWx = null;
+const H = () => globalThis.GrindHourly;
+const wxSlots = () => H() ? H().normSlots(prefs.wxSlots) : [7, 12, 16, 20];
 async function loadWeather(){
+  wxSetupOpen = false;
   $("wxUnits").textContent = units() === "c" ? "°C" : "°F";
   if(!validPlace(prefs.place)){ prefs.place = {...DEFAULT_PLACE}; savePrefs(); }
   const p = prefs.place;
   try {
     const q = new URLSearchParams({latitude:p.lat, longitude:p.lon, timezone:"auto", forecast_days:"5",
       current:"temperature_2m,weather_code", daily:"weather_code,temperature_2m_max,temperature_2m_min",
+      hourly:"temperature_2m,apparent_temperature,precipitation_probability,weather_code",
       temperature_unit: units() === "c" ? "celsius" : "fahrenheit"});
     const w = await fetch("https://api.open-meteo.com/v1/forecast?" + q).then(r => { if(!r.ok) throw 0; return r.json(); });
-    const now = wmo(w.current.weather_code), d = w.daily, r = Math.round;
+    lastWx = w;
     $("wxPlace").innerHTML = `${esc(p.name)} <button type="button" class="chip" id="wxChange" title="Change place">Change</button>`;
     $("wxChange").onclick = () => weatherSetup();
-    $("wxBody").innerHTML = `<div class="wx-now"><div class="wx-temp">${r(w.current.temperature_2m)}°</div>
-        <div class="wx-icon" aria-hidden="true">${now.icon}</div>
-        <div><div class="wx-cond">${now.text}</div><div class="wx-hilo">H ${r(d.temperature_2m_max[0])}° · L ${r(d.temperature_2m_min[0])}°</div></div></div>
-      <div class="wx-days">${d.time.map((t, i) => { const c = wmo(d.weather_code[i]);
-        const name = i ? new Date(t + "T12:00").toLocaleDateString([], {weekday:"short"}) : "Today";
-        return `<div><div class="day">${name}</div><div class="ic" title="${c.text}">${c.icon}</div><div>${r(d.temperature_2m_max[i])}° <span class="lo">${r(d.temperature_2m_min[i])}°</span></div></div>`; }).join("")}</div>`;
-  } catch { $("wxBody").innerHTML = `<div class="empty">Weather is unavailable right now.</div>`; }
+    renderWeather();
+  } catch { lastWx = null; $("wxBody").innerHTML = `<div class="empty">Weather is unavailable right now.</div>`; }
 }
+function renderWeather(){
+  const w = lastWx; if(!w || wxSetupOpen) return;   // never wipe the place picker while it is open
+  const now = wmo(w.current.weather_code), d = w.daily, r = Math.round;
+  $("wxBody").innerHTML = `<div class="wx-now"><div class="wx-temp">${r(w.current.temperature_2m)}°</div>
+      <div class="wx-icon" aria-hidden="true">${now.icon}</div>
+      <div><div class="wx-cond">${now.text}</div><div class="wx-hilo">H ${r(d.temperature_2m_max[0])}° · L ${r(d.temperature_2m_min[0])}°</div></div></div>
+    ${slotsHtml(w)}
+    <div class="wx-strip" id="wxStrip"></div>
+    <div class="wx-days">${d.time.map((t, i) => { const c = wmo(d.weather_code[i]);
+      const name = i ? new Date(t + "T12:00").toLocaleDateString([], {weekday:"short"}) : "Today";
+      return `<div><div class="day">${name}</div><div class="ic" title="${c.text}">${c.icon}</div><div>${r(d.temperature_2m_max[i])}° <span class="lo">${r(d.temperature_2m_min[i])}°</span></div></div>`; }).join("")}</div>`;
+  drawStrip();
+}
+function slotsHtml(w){
+  const pick = H()?.pickSlots(w.hourly, w.utc_offset_seconds, Date.now(), prefs.wxSlots);
+  if(!pick) return "";
+  const r = Math.round, day = pick.tomorrow ? new Date(pick.date + "T12:00").toLocaleDateString([], {weekday:"short"}) + " " : "";
+  return `<div class="wx-slots" role="list" aria-label="${pick.tomorrow ? "Tomorrow" : "Today"} by the hour">${pick.slots.map(s => {
+    const label = day + H().hourLabel(s.hour, true);
+    if(s.missing) return `<div class="wx-slot" role="listitem"><div class="when">${label}</div><div class="feels">No data</div></div>`;
+    const c = wmo(s.code);
+    return `<div class="wx-slot${s.passed ? " passed" : ""}${s.current ? " current" : ""}" role="listitem">
+      <div class="when">${label}</div>
+      <div class="ic" title="${c.text}" aria-label="${c.text}">${c.icon}</div>
+      <div class="t">${r(s.temp)}°</div>
+      <div class="feels">Feels ${r(s.feels)}°</div>
+      <div class="rain" title="Chance of rain">💧 ${Number.isFinite(s.rain) ? r(s.rain) : "–"}%</div></div>`; }).join("")}</div>`;
+}
+function drawStrip(){
+  const host = $("wxStrip"), w = lastWx; if(!host || !w || !H()) return;
+  const pts = H().stripWindow(w.hourly, w.utc_offset_seconds, Date.now(), 24);
+  host.innerHTML = H().stripSvg(pts, host.clientWidth || 320, prefs.wxSlots);
+}
+/* Times editor: pick the hourly check-in slots (whole hours), saved on this device. */
+function wxTimesEditor(open){
+  const box = $("wxTimesEdit"), btn = $("wxTimes");
+  box.hidden = !open; btn.setAttribute("aria-expanded", String(open));
+  if(!open) return;
+  const opts = sel => Array.from({length:24}, (_, h) => `<option value="${h}"${h === sel ? " selected" : ""}>${H() ? H().hourLabel(h, true) : h}</option>`).join("");
+  const cur = wxSlots();
+  box.innerHTML = `<span>Check-in times</span>${[0,1,2,3].map(i => `<select aria-label="Time ${i + 1}" data-slot="${i}">${opts(cur[i] ?? [7,12,16,20][i])}</select>`).join("")}
+    <button type="button" class="chip" id="wxTimesSave">Save</button><button type="button" class="chip" id="wxTimesReset">Default</button>`;
+  $("wxTimesSave").onclick = () => {
+    prefs.wxSlots = wxSlotsFrom([...box.querySelectorAll("select")].map(s => +s.value)); savePrefs();
+    wxTimesEditor(false); renderWeather();
+  };
+  $("wxTimesReset").onclick = () => { delete prefs.wxSlots; savePrefs(); wxTimesEditor(false); renderWeather(); };
+}
+const wxSlotsFrom = arr => H() ? H().normSlots(arr) : arr;
+$("wxTimes").onclick = () => wxTimesEditor($("wxTimesEdit").hidden);
 $("wxUnits").onclick = () => { prefs.units = units() === "c" ? "f" : "c"; savePrefs(); loadWeather(); };
 
 /* ---------------- usage feed ---------------- */
@@ -192,9 +259,37 @@ let resizeTimer;
 globalThis.addEventListener?.("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => usageModel?.ready && renderUsage(), 150); });
 $('refreshUsage').onclick = () => loadFeed();
 
+/* ---------------- layout ---------------- */
+/* Card registry. `frac` is the default width as a share of the row (layout.js turns it into columns
+   for whatever screen this is). New cards are added here and appear at the end of saved layouts. */
+const CARDS = [
+  {id:"clock",    title:"Clock",    frac:0.25},
+  {id:"calendar", title:"Calendar", frac:0.25},
+  {id:"weather",  title:"Weather",  frac:0.5},
+  {id:"usage",    title:"AI usage", frac:1},
+];
+/* A card that changes size redraws its own charts. One frame of batching keeps a drag or a span
+   change to a single redraw. Kept here rather than in usage-widgets.js, which the Stream Deck plugin
+   ships a copy of. */
+const redrawQueued = new Set();
+function cardResized(id){
+  if(redrawQueued.has(id)) return;
+  redrawQueued.add(id);
+  (globalThis.requestAnimationFrame || (f => f()))(() => {
+    redrawQueued.delete(id);
+    if(id === "usage" && usageModel?.ready) renderUsage();
+    if(id === "weather") drawStrip();
+  });
+}
+if(globalThis.GrindLayout && document.querySelector){
+  GrindLayout.mount({grid: document.querySelector("main.grid"), registry: CARDS, prefs, save: savePrefs,
+    search: location.search, onResize: cardResized, bar: $("layoutBar"), toggle: $("editLayout")});
+}
+
 /* ---------------- start ---------------- */
-tickClock(); setInterval(tickClock, 1000);
+runClock();
 loadWeather(); setInterval(loadWeather, 30 * 60 * 1000);
+setInterval(renderWeather, 60 * 1000);   // Move the hourly slots and strip along between forecasts.
 loadFeed(); setInterval(loadFeed, FEED_POLL_MS);
 setInterval(renderUsage, 60 * 1000);   // Update countdowns; measurement timestamps stay fixed.
-document.addEventListener("visibilitychange", () => { if(!document.hidden){ loadFeed(); tickClock(); } });
+document.addEventListener("visibilitychange", () => { if(!document.hidden){ loadFeed(); runClock(); renderWeather(); } });

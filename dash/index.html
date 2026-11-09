@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png">
 <meta name="application-name" content="SB2G Dashboard">
 <link rel="manifest" href="../manifest.webmanifest">
-<link rel="stylesheet" href="dashboard.css?v=20261108-runway2">
+<link rel="stylesheet" href="dashboard.css?v=20261109-dashv2">
 </head>
 <body>
 <div class="wrap">
@@ -18,26 +18,32 @@
       <div class="eyebrow">SB2G</div>
       <h1>Dashboard</h1>
     </div>
-    <a class="back" href="../">← SB2G</a>
+    <div class="top-actions">
+      <button type="button" class="chip" id="editLayout" aria-pressed="false" title="Reorder, resize or hide cards">Edit layout</button>
+      <a class="back" href="../">← SB2G</a>
+    </div>
   </header>
+  <div class="layout-bar" id="layoutBar" hidden></div>
 
   <main class="grid">
-    <section class="tile clock" aria-label="Clock">
+    <section class="tile clock" data-card="clock" aria-label="Clock">
       <div class="clock-time" id="clockTime">--:--</div>
     </section>
 
-    <section class="tile cal" aria-label="Calendar">
+    <section class="tile cal" data-card="calendar" aria-label="Calendar">
       <div class="tile-head"><span id="calMonth"></span></div>
       <div class="cal-grid" id="calGrid"></div>
     </section>
 
-    <section class="tile weather" aria-label="Weather" id="weather">
+    <section class="tile weather" data-card="weather" aria-label="Weather" id="weather">
       <div class="tile-head"><span id="wxPlace">Weather</span>
-        <button type="button" class="chip" id="wxUnits" title="Switch units">°F</button></div>
+        <span class="wx-head-actions"><button type="button" class="chip" id="wxTimes" aria-expanded="false" title="Choose the hourly check-in times">Times</button>
+        <button type="button" class="chip" id="wxUnits" title="Switch units">°F</button></span></div>
+      <div class="wx-times" id="wxTimesEdit" hidden></div>
       <div id="wxBody"></div>
     </section>
 
-    <section class="wide usage-cc" aria-label="AI usage">
+    <section class="usage-cc" data-card="usage" aria-label="AI usage">
       <div class="tile-head"><span>AI usage</span><span class="cc-right"><span class="small" id="feedAge" role="status"></span><button class="chip" id="refreshUsage" type="button">Refresh</button></span></div>
       <p class="verdict" id="usageVerdict">Loading usage…</p>
       <div class="cc-bar">
@@ -67,7 +73,9 @@
 
   <p class="foot muted small">Usage comes from CodexBar on the Mac, refreshed about every 5 minutes while it is awake. Weather: Open-Meteo.</p>
 </div>
-<script src="usage-widgets.js?v=20261108-runway2"></script>
-<script src="dashboard.js?v=20261108-runway2"></script>
+<script src="usage-widgets.js?v=20261109-dashv2"></script>
+<script src="layout.js?v=20261109-dashv2"></script>
+<script src="hourly.js?v=20261109-dashv2"></script>
+<script src="dashboard.js?v=20261109-dashv2"></script>
 </body>
 </html>
