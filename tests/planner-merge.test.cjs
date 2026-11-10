@@ -19,7 +19,7 @@ const withLyrics=vocals.find(s=>s.versions[0].lyrics);
     page.on('dialog',d=>d.type()==='prompt'?d.accept('Planner nickname'):d.accept());
 
     await page.goto(BASE+'/audio/?view=consider',{waitUntil:'networkidle'});
-    assert.match(page.url(),/\/audio-board\/album\/\?/);
+    assert.match(page.url(),/\/audio\/album\/\?/);
     assert.equal(await page.locator('#considerList .card').count(),vocals.length);
     checked('Audio Board opens the planner; Album picks starts with every considered vocal take as Unreviewed');
 

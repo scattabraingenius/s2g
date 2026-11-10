@@ -122,7 +122,10 @@ window.addEventListener("popstate", e => {
 // ---------- helpers ----------
 const take = stem => TAKES[stem] || window.ALBUM_TRASHED_TAKES?.[stem] || {stem, title:"Suno " + stem.slice(0, 8), baseTitle:"Not in catalogue", missing:true, writer:"", duration:0, createdAt:""};
 const item = stem => state.considered[stem] || {};
-const live = () => Object.keys(state.considered).filter(s => !item(s).delDone);   // deleted on Suno = gone from the plan
+const available = stems => stems.filter(stem => !!TAKES[stem]);
+// Keep saved records for unavailable takes; only the current catalog is rendered.
+const visibleAlbum = a => ({...a, order:available(a.order), cut:available(a.cut)});
+const live = () => available(Object.keys(state.considered)).filter(s => !item(s).delDone);   // deleted on Suno = gone from the plan
 const album = () => state.albums[ui.album];
 // One status per take per album: unreviewed, maybe, short, on, cut.
 const statusOf = (stem, id = ui.album) => PlannerStatus.statusOf(state, audio.ratings, stem, id);
@@ -177,15 +180,15 @@ async function copyText(text) { try { await navigator.clipboard.writeText(text);
 
 // Track target: amber when over, red when well over. "Well over" is more than a quarter of the target (at least 3 tracks).
 function targetState(a) {
-  const n = a.order.length, target = a.target || 12, over = Math.max(0, n - target);
+  const order = available(a.order), n = order.length, target = a.target || 12, over = Math.max(0, n - target);
   const level = !over ? "" : over > Math.max(2, Math.ceil(target * .25)) ? "bad" : "warn";
-  const total = a.order.reduce((sum, s) => sum + (take(s).duration || 0), 0);
+  const total = order.reduce((sum, s) => sum + (take(s).duration || 0), 0);
   return {n, target, over, level, total, text:`${n}/${target} tracks${over ? " · " + over + " over target" : ""}`};
 }
 // Songs that appear more than once on an album: baseTitle → stems.
 function dupesOn(a) {
   const by = new Map();
-  for (const s of a.order) { const b = take(s).baseTitle; if (!by.has(b)) by.set(b, []); by.get(b).push(s); }
+  for (const s of available(a.order)) { const b = take(s).baseTitle; if (!by.has(b)) by.set(b, []); by.get(b).push(s); }
   return new Map([...by].filter(([, list]) => list.length > 1));
 }
 
@@ -363,15 +366,15 @@ function renderTarget() {
   $("targetStats").innerHTML = `<span class="tstat ${ts.level}">${esc(ts.text)}</span> · ${longDur(ts.total)} · ${live().filter(s => isCut(s)).length} cut`;
 }
 function renderSummary() {
-  const stems = live(), a = album();
+  const stems = ui.view === "sort" ? catalog() : live(), a = album();
   const counts = Object.fromEntries(PlannerStatus.STATUSES.map(k => [k, 0]));
   for (const s of stems) if (!tagged(s)) counts[statusOf(s)]++;
   const cleanup = stems.filter(tagged).length + stems.filter(s => item(s).name && !item(s).renameDone).length;
   $("summary").textContent = `${counts.unreviewed} unreviewed for ${a.name} · ${counts.on} on the album · ${counts.cut} cut · ${stems.filter(tagged).length} marked for deletion`;
-  $("countConsider").textContent = `(${counts.unreviewed})`;
+  $("countConsider").textContent = `(${live().filter(s => !tagged(s) && statusOf(s) === "unreviewed").length})`;
   $("countSort").textContent = `(${sortBuckets().todo.length})`;
   $("countSessions").textContent = Object.keys(state.sessions).length ? `(${Object.keys(state.sessions).length})` : "";
-  $("countAlbums").textContent = `(${a.order.length})`;
+  $("countAlbums").textContent = `(${available(a.order).length})`;
   $("countCleanup").textContent = cleanup ? `(${cleanup})` : "";
   $("built").textContent = window.ALBUM_BUILT ? "Suno snapshot " + window.ALBUM_BUILT : "";
 }
@@ -388,7 +391,7 @@ function renderPanel() {
   const show = HOST ? HOST.panelVisible(ui.view) : PANEL_VIEWS.includes(ui.view), panel = $("trackPanel");
   panel.classList.toggle("hidden", !show); document.body.classList.toggle("has-panel", show);
   if (!show) return;
-  const a = album(), ts = targetState(a), twins = dupesOn(a);
+  const a = visibleAlbum(album()), ts = targetState(a), twins = dupesOn(a);
   $("panelBar").innerHTML = `<b>${esc(shortName(a))}</b><span class="tstat ${ts.level}">${ts.n}/${ts.target}${ts.over ? " · " + ts.over + " over" : ""}</span><span class="ptotal">${longDur(ts.total)}</span><span class="chev" aria-hidden="true">▴</span>`;
   $("panelBody").innerHTML = `<p class="tstat-line ${ts.level}">${esc(ts.text)}${ts.level ? "" : ""}</p>
     <ol class="ptracks">${a.order.length ? a.order.map((stem, i) => {
@@ -475,6 +478,7 @@ function renderSort() {
   $("sortSortDir").textContent = dirLabel(sortDir());
   setOptions($("sortType"), [["Vocal", "Vocals"], ["Instrumental", "Instrumentals"], ["Stem", "Stems"], ["all", "All types"]].map(([k, l]) => `<option value="${k}">${l}</option>`).join("")); $("sortType").value = ui.type;
   renderSortChrome();
+  renderSummary();
   const stems = sortStems(b[ui.sortFilter].filter(matchesQuery));
   const empty = {todo:"Nothing left to sort here. Switch the type filter, or check Saved for later.", later:"Nothing saved for later.", done:"Nothing on an album yet."}[ui.sortFilter];
   $("sortList").innerHTML = stems.length ? `<div class="cards single">${stems.map(s => card(s, {sortMode:true})).join("")}</div>` : `<p class="empty-note big">${stems.length || b[ui.sortFilter].length ? "No takes match the search." : empty}</p>`;
@@ -567,7 +571,7 @@ function collapseCard(el, box) {
 }
 
 function sessionStats(s) {
-  const members = s.members.filter(m => !item(m).delDone), a = album();
+  const members = available(s.members).filter(m => !item(m).delDone), a = album();
   return {members, on:members.filter(m => a.order.includes(m)).length, cut:members.filter(m => isCut(m)).length, excluded:members.filter(m => !eligible(m)).length, open:members.filter(m => eligible(m) && !a.order.includes(m)).length};
 }
 function renderSessions() {
@@ -596,7 +600,7 @@ function renderSessions() {
 }
 
 function renderAlbums() {
-  const albums = Object.entries(state.albums).sort(([, a], [, b]) => a.created - b.created), a = album(), ts = targetState(a), twins = dupesOn(a);
+  const albums = Object.entries(state.albums).map(([id, a]) => [id, visibleAlbum(a)]).sort(([, a], [, b]) => a.created - b.created), a = visibleAlbum(album()), ts = targetState(a), twins = dupesOn(a);
   $("albumHead").innerHTML = `<div class="field-head"><input class="title-edit" id="albumName" value="${esc(a.name)}" aria-label="Album name">
       <span class="tools-inline"><label class="meta">Target <input type="number" id="albumTarget" min="1" max="40" value="${a.target || 12}"> tracks</label>
       <button class="btn small" id="copyAlbum">Copy tracklist</button>${albums.length > 1 ? `<button class="btn small danger" id="deleteAlbum">Delete album</button>` : ""}</span></div>
@@ -649,7 +653,7 @@ function renderMissing(a, albums) {
 }
 
 function renderCleanup() {
-  const all = Object.keys(state.considered);
+  const all = available(Object.keys(state.considered));
   const dels = all.filter(s => item(s).del).sort((a, b) => !!item(a).delDone - !!item(b).delDone || nameOf(a).localeCompare(nameOf(b)));
   const renames = all.filter(s => item(s).name).sort((a, b) => !!item(a).renameDone - !!item(b).renameDone || take(a).title.localeCompare(take(b).title));
   const delTodo = dels.filter(s => !item(s).delDone), renTodo = renames.filter(s => !item(s).renameDone);
