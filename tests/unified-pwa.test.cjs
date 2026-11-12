@@ -37,7 +37,7 @@ async function assertNoHorizontalOverflow(page, label) {
       assert(/^\d\d:\d\d/.test(await page.locator("#clock").innerText()), `${label}: live clock is missing`);
       assert((await page.locator("#datestrDay").innerText()).length > 0 && /\d{4}$/.test(await page.locator("#datestr").innerText()), `${label}: two-line date is missing`);
       assert(await page.locator(".ab-sb2g img").evaluate(image => image.complete && image.naturalWidth > 0), `${label}: SB2G icon did not load`);
-      const navNames = ["Home", "Calendar", "Agenda", "Time", "Lyrics", "Audio", ...extraNav, "Life Admin"];
+      const navNames = ["Home", "Calendar", "Agenda", "Time", "Studio", ...extraNav, "Life Admin"];
       assert(await page.locator("#appNav > .navbtn").count() === navNames.length, `${label}: expected ${navNames.join(", ")}`);
       assert(await page.locator("#lifeAdminPanel .la-link").count() === 4, `${label}: Life Admin should hold EHAH, Clothing, Chores and Bank`);
       assert(await page.locator(".nav-ico").evaluateAll((images, n) => images.length === n && images.every(image => image.complete && image.naturalWidth > 0), navNames.length + 4), `${label}: nav icons did not load`);
