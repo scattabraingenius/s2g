@@ -37,7 +37,12 @@
     const frac = {};
     for (const c of registry) frac[c.id] = clampFrac(s.frac && s.frac[c.id]) ?? c.frac;
     const hidden = (Array.isArray(s.hidden) ? s.hidden : []).filter((id, i, a) => ids.includes(id) && a.indexOf(id) === i);
-    return {order, frac, hidden};
+    const height = {};
+    for (const c of registry) {
+      const h = s.height && s.height[c.id];
+      if (["clock", "calendar"].includes(c.id) && Number.isFinite(h)) height[c.id] = Math.max(170, Math.min(1200, h));
+    }
+    return {order, frac, hidden, height};
   }
   /* Halves round down (1.5 columns -> 1), so a row of shares that adds up to 1 (a quarter, a quarter,
      a half) still fits on one row at 6 columns instead of spilling over. */
@@ -94,7 +99,7 @@
     const cards = new Map(registry.map(c => [c.id, grid.querySelector(`[data-card="${c.id}"]`)]).filter(([, el]) => el));
     const title = id => (registry.find(c => c.id === id) || {}).title || id;
 
-    function persist() { store()[name] = {order: layout.order, frac: layout.frac, hidden: layout.hidden}; save(); }
+    function persist() { store()[name] = {order: layout.order, frac: layout.frac, hidden: layout.hidden, height: layout.height}; save(); }
     function apply() {
       grid.style.setProperty("--cols", cols);
       const want = layout.order.map(id => cards.get(id)).filter(Boolean);
@@ -104,6 +109,7 @@
         const el = cards.get(id); if (!el) continue;
         el.hidden = layout.hidden.includes(id);
         el.style.gridColumn = el.hidden ? "" : `span ${spans[id]}`;
+        if (id === "clock" || id === "calendar") el.style.minHeight = layout.height[id] ? `${layout.height[id]}px` : "";
       }
       if (editing) paintBar();
     }
@@ -121,11 +127,16 @@
         <button type="button" data-act="next" aria-label="Move ${title(id)} later" title="Move later">▶</button>
         <button type="button" data-act="narrow" aria-label="Make ${title(id)} narrower" title="Narrower">−</button>
         <button type="button" data-act="wide" aria-label="Make ${title(id)} wider" title="Wider">+</button>
+        ${["clock", "calendar"].includes(id) ? `<button type="button" data-act="shorter" aria-label="Make ${title(id)} shorter" title="Shorter">↓</button><button type="button" data-act="taller" aria-label="Make ${title(id)} taller" title="Taller">↑</button>` : ""}
         <button type="button" data-act="hide" aria-label="Hide ${title(id)}" title="Hide">Hide</button>`;
       t.addEventListener("click", e => {
         const act = e.target.closest("button")?.dataset.act; if (!act || act === "drag") return;
         if (act === "prev" || act === "next") layout = move(layout, id, act === "prev" ? -1 : 1);
         if (act === "narrow" || act === "wide") layout = resize(layout, id, act === "wide" ? 1 : -1, cols);
+        if (act === "shorter" || act === "taller") {
+          const current = layout.height[id] || Math.round(cards.get(id).getBoundingClientRect().height);
+          layout.height[id] = Math.max(170, Math.min(1200, current + (act === "taller" ? 80 : -80)));
+        }
         if (act === "hide") layout = setHidden(layout, id, true);
         persist(); apply();
         const again = act === "hide" ? bar.querySelector("button") : cards.get(id).querySelector(`[data-act="${act}"]`);

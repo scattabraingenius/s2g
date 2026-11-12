@@ -28,8 +28,15 @@ const CLOCK_FMT = new Intl.DateTimeFormat([], {hour:"numeric", minute:"2-digit",
 function clockHtml(now){
   const parts = CLOCK_FMT.formatToParts(now), part = type => parts.find(p => p.type === type)?.value || "";
   const ampm = part("dayPeriod");
-  return `${esc(part("hour"))}:${esc(part("minute"))}<span class="sec">:${esc(part("second"))}</span>` + (ampm ? `<span class="ampm">${esc(ampm)}</span>` : "");
+  return `${esc(part("hour"))}:${esc(part("minute"))}<span class="sec">:${esc(part("second"))}</span>` + (ampm && prefs.showClockPeriod === true ? `<span class="ampm">${esc(ampm)}</span>` : "");
 }
+$('clockPeriod')?.setAttribute?.('aria-pressed', String(prefs.showClockPeriod === true));
+$('clockPeriod')?.addEventListener?.('click', () => {
+  prefs.showClockPeriod = prefs.showClockPeriod !== true;
+  savePrefs();
+  $('clockPeriod').setAttribute('aria-pressed', String(prefs.showClockPeriod));
+  tickClock();
+});
 function tickClock(){
   const now = new Date();
   $("clockTime").innerHTML = clockHtml(now);
