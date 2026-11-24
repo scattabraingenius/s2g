@@ -27,12 +27,18 @@ replacements={
 for a,b in replacements.items():
     assert source.count(a)==1,a
     source=source.replace(a,b)
-# Keep both board destinations when the standalone family planner is re-embedded.
-source=source.replace('label:"Album", icon:"agenda", href:SB2G_URL+"lyrics/"','label:"Lyrics", icon:"agenda", href:SB2G_URL+"lyrics/"')
-if 'id:"audio", label:"Audio"' not in source:
-    album_link='  if(SB2G_URL) items.push({id:"album", label:"Lyrics", icon:"agenda", href:SB2G_URL+"lyrics/"});'
-    assert source.count(album_link)==1,'Album Board destination missing from family planner'
-    source=source.replace(album_link,album_link+'\n  if(SB2G_URL) items.push({id:"audio", label:"Audio", icon:"time", href:SB2G_URL+"audio/"});')
+# The old Lyric and Audio boards are archived in place; MM Home points at the Studio Board instead.
+old_lyrics='  if(SB2G_URL) items.push({id:"album", label:"Lyrics", icon:"agenda", href:SB2G_URL+"lyrics/"});'
+old_album='  if(SB2G_URL) items.push({id:"album", label:"Album", icon:"agenda", href:SB2G_URL+"lyrics/"});'
+old_audio='  if(SB2G_URL) items.push({id:"audio", label:"Audio", icon:"time", href:SB2G_URL+"audio/"});'
+studio_link='  if(SB2G_URL) items.push({id:"studio", label:"Studio", icon:"agenda", href:SB2G_URL+"studio/"});'
+for stale in (old_lyrics,old_album,old_audio):
+    source=source.replace(stale+'\r\n','').replace(stale+'\n','').replace(stale,'')
+if 'id:"studio"' not in source:
+    anchor='  const items=["home","calendar","agenda"].map(item);'
+    assert source.count(anchor)==1,'Nav items line missing from family planner'
+    source=source.replace(anchor,anchor+'\n'+studio_link)
+assert '"lyrics/"' not in source and '"audio/"' not in source,'Old board links are still in MM Home'
 source=source.replace('src="./icons/nav/', 'src="../icons/nav/').replace('url("./icons/nav/', 'url("../icons/nav/')
 (root/'mm/index.html').write_text(source,encoding='utf-8',newline='\r\n')
 icons=root/'icons/nav'

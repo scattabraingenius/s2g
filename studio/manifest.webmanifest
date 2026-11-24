@@ -1,0 +1,31 @@
+{
+  "id": "/s2g/studio/",
+  "name": "Studio Board",
+  "short_name": "Studio",
+  "description": "Scatta's songs: lyric versions, Suno takes, scores, album planning and the track catalog in one place.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0C0812",
+  "theme_color": "#0C0812",
+  "icons": [
+    {
+      "src": "../lyrics/icons/lyric-notebook-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "../lyrics/icons/lyric-notebook-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "../lyrics/icons/lyric-notebook-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
