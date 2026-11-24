@@ -83,7 +83,7 @@ def session_label(folder):
 
 def sync(studio, catalog_dir, private_dir, write=False):
     studio, catalog_dir, private_dir = Path(studio).resolve(), Path(catalog_dir).resolve(), Path(private_dir).resolve()
-    if private_dir.is_relative_to(ROOT) or private_dir.is_relative_to(studio):
+    if private_dir.is_relative_to(ROOT.resolve()) or private_dir.is_relative_to(studio):
         raise ValueError('Private receipts must be outside the repo and Studio.')
     dataset = json.loads((catalog_dir/'data/catalog.json').read_text(encoding='utf-8-sig'))
     coverage = dataset['coverage']
@@ -282,8 +282,11 @@ def sync(studio, catalog_dir, private_dir, write=False):
         title, base = c['title'], c['base_title']
         writer = c.get('writer') or previous.get('writer') or 'Unknown'
         pv = c.get('version', '').removeprefix('v') or str(previous.get('packetVersion') or '')
-        if previous.get('type') == 'Stem':
-            base = old_audio[cid].get('baseTitle') or base
+        old_base = old_audio.get(cid, {}).get('baseTitle') or ''
+        # Keep a stem's published parent song. A first run may retype a stem as
+        # Instrumental, so later runs also match the catalog's "<parent> (<part>)" base.
+        if previous.get('type') == 'Stem' or (old_base and re.fullmatch(re.escape(old_base) + r' \([^()]+\)', base)):
+            base = old_base or base
         text = meta.get('prompt') or ''
         kind = 'Instrumental' if meta.get('make_instrumental') is True or c.get('mode') == 'Instrumental requested' or re.search(r'\.i[CMS]\d', title) else previous.get('type', 'Vocal')
         session = {'Vocal': 'Vocals', 'Instrumental': 'Instrumentals', 'Stem': 'Stems'}.get(kind, 'Other')
