@@ -95,7 +95,8 @@ function boot({search = '', prefs = null} = {}) {
   const store = {};
   if (prefs) store['grind.studio.v1.view'] = JSON.stringify(prefs);
   const document = {getElementById:el, querySelectorAll:() => [], querySelector:() => null, addEventListener:(t, f) => { (handlers[t] ||= []).push(f); }, body:{dataset:{}, classList:{toggle() {}, add() {}, remove() {}}}, activeElement:null, hidden:false, createElement:() => el('x' + Math.random())};
-  const sandbox = {document, console, URLSearchParams, URL, CSS:{escape:x => x}, JSON, Math, Date, Set, Map, Promise, Object, Array, String, Number, setTimeout, clearTimeout, crypto:require('node:crypto').webcrypto,
+  const downloads = [], FakeURL = class extends URL { static createObjectURL(b) { downloads.push(b.text); return 'blob:test'; } static revokeObjectURL() {} };
+  const sandbox = {document, console, URLSearchParams, URL:FakeURL, Blob:class { constructor(parts) { this.text = parts.join(''); } }, CSS:{escape:x => x}, JSON, Math, Date, Set, Map, Promise, Object, Array, String, Number, setTimeout, clearTimeout, crypto:require('node:crypto').webcrypto,
     navigator:{}, localStorage:{getItem:k => (k in store ? store[k] : null), setItem:(k, v) => { store[k] = String(v); }, removeItem:k => { delete store[k]; }},
     location:{pathname:'/s2g/studio/', search}, history:{state:null, replaceState() {}, pushState() {}}, addEventListener() {}, confirm:() => true,
     getSelection:() => null, requestAnimationFrame:f => f()};
@@ -106,7 +107,7 @@ function boot({search = '', prefs = null} = {}) {
   load('lyrics/songs.js'); sandbox.LYRIC_SONGS = sandbox.ALBUM_SONGS;
   load('audio/tracks.js'); sandbox.TAKE_SONGS = sandbox.ALBUM_SONGS;
   for (const f of ['studio/catalog.js', 'lyrics/review-tools.js', 'lyrics/sync.js', 'audio/album/planner-sync.js', 'studio/studio-sync.js', 'studio/model.js', 'studio/stores.js', 'studio/app.js']) load(f);
-  return {els, store, ctx, handlers};
+  return {els, store, ctx, handlers, downloads};
 }
 const keysIn = html => [...String(html).matchAll(/data-song="([^"]+)"/g)].map(m => m[1]);
 {
@@ -200,4 +201,89 @@ const keysIn = html => [...String(html).matchAll(/data-song="([^"]+)"/g)].map(m 
   const dated = s => MD.versionsOf(s, {}).some(v => /\d{4}-\d{2}-\d{2}/.test(v.folder + ' ' + v.stem + ' ' + v.session)) || (s.cat?.batches || []).some(b => /\d{4}-\d{2}-\d{2}/.test(b));
   console.log(`dates: ${MD.songs.filter(dated).length} of ${MD.songs.length} songs have a written date`);
   console.log(`COUNTS songs=${expSongs.length} instrumentals=${expInstr.length} beatPrompts=${expPrompts.length} stems=${stems.length}`);
+
+  // ---- Inventory: Songs | Instrumentals | Every Suno take, column chooser, sorting, filter, drawer, CSV ----
+  const lyricLine = (() => { for (const ls of data.LYRIC_SONGS) for (const v of ls.versions) { const l = String(v.lyrics || '').split('\n').map(x => x.trim()).find(x => x.length > 30 && !/^[\[(#]/.test(x)); if (l) return l; } return null; })();
+  assert.ok(lyricLine, 'the test needs one real lyric line to prove it never leaks (the line is not stored in this file)');
+  const invClick = (app, target) => app.handlers.click.forEach(f => f({target:{closest:sel => (/^a\[|^\[data-copy-path/.test(sel) ? null : target)}, button:0}));
+  const btn = (id, dataset = {}) => ({id, dataset, matches:() => false});
+  const rowCount = h => +/ of (\d+) rows/.exec(String(h))[1], shownRows = h => +/(\d+) of \d+ rows/.exec(String(h))[1];
+  const headers = h => [...String(h).matchAll(/<th[^>]*>(?:<button[^>]*>)?([^<↑↓]+?)(?: [↑↓])?(?:<\/button>)?<\/th>/g)].map(m => m[1].trim());
+  {
+    const si = boot({search:'?view=inventory', prefs:{inv:'songs'}}), ii = boot({search:'?view=inventory', prefs:{inv:'instrumentals'}}), ti = boot({search:'?view=inventory', prefs:{inv:'takes'}});
+    assert.equal(rowCount(si.els.page.innerHTML), expSongs.length, 'Inventory Songs lists the songs with sung words');
+    assert.equal(rowCount(ii.els.page.innerHTML), expInstr.length, 'Inventory Instrumentals lists instrumentals without beat prompts');
+    const ip = boot({search:'?view=inventory', prefs:{inv:'instrumentals', prompts:true}});
+    assert.equal(rowCount(ip.els.page.innerHTML), expInstr.length + expPrompts.length, 'beat prompts come in with their toggle');
+    assert.ok(/data-inv="songs"/.test(si.els.page.innerHTML) && /data-inv="instrumentals"/.test(si.els.page.innerHTML) && /data-inv="takes"/.test(si.els.page.innerHTML), 'the top toggle has Songs, Instrumentals and Every Suno take');
+    pass('Inventory top toggle: Songs, Instrumentals (beat prompts behind their toggle) and Every Suno take');
+
+    // default columns, every field available in the chooser
+    const defHeads = headers(si.els.page.innerHTML);
+    assert.deepEqual(defHeads, ['Title', 'Where', 'Writers', 'Recent activity', 'Lyric versions', 'Takes on board', 'Best score', 'Song status']);
+    const chooserBoxes = [...si.els.page.innerHTML.matchAll(/data-inv-col="([^"]+)"/g)].map(m => m[1]);
+    assert.ok(chooserBoxes.length >= 50, 'the chooser lists every song field: ' + chooserBoxes.length);
+    assert.equal(new Set(chooserBoxes).size, chooserBoxes.length);
+    pass(`column chooser: ${chooserBoxes.length} song columns, ${defHeads.length} shown by default`);
+
+    // show a column, saved on this device in the view prefs; show all; reset
+    const cc = boot({search:'?view=inventory', prefs:{inv:'songs'}});
+    cc.handlers.change.forEach(f => f({target:{id:'', dataset:{invCol:'created'}, checked:true}}));
+    assert.ok(headers(cc.els.invBody.innerHTML).includes('Date created'), 'ticking a column shows it');
+    assert.deepEqual(JSON.parse(cc.store['grind.studio.v1.view']).invCols.songs.includes('created'), true);
+    assert.ok(!Object.keys(cc.store).some(k => k !== 'grind.studio.v1.view' && /view|col/i.test(k) && k.startsWith('grind')), 'no new synced key');
+    const reload = boot({search:'?view=inventory', prefs:JSON.parse(cc.store['grind.studio.v1.view'])});
+    assert.ok(headers(reload.els.page.innerHTML).includes('Date created'), 'the choice survives a reload');
+    invClick(cc, btn('colsAll'));
+    assert.equal(headers(cc.els.page.innerHTML).length, chooserBoxes.length, 'Show all shows every column');
+    invClick(cc, btn('colsReset'));
+    assert.deepEqual(headers(cc.els.page.innerHTML), defHeads, 'Reset brings back the default set');
+    assert.equal(JSON.parse(cc.store['grind.studio.v1.view']).invCols.songs, null);
+    pass('columns can be shown, hidden, all shown and reset; the choice is saved in the local view prefs only');
+
+    // sort and filter
+    const so = boot({search:'?view=inventory', prefs:{inv:'songs'}});
+    const titlesOf = h => [...String(h).matchAll(/<button class="linkish" data-inv-row="[^"]*">([^<]*)<\/button>/g)].map(m => m[1].replaceAll('&amp;', '&').replaceAll('&#39;', "'").replaceAll('&quot;', '"'));
+    invClick(so, btn('', {invSort:'title'}));
+    const asc = titlesOf(so.els.invBody.innerHTML); assert.ok(asc.length > 1);
+    assert.deepEqual(asc, [...asc].sort((a, b) => a.localeCompare(b, undefined, {numeric:true, sensitivity:'base'})), 'sorted A to Z');
+    invClick(so, btn('', {invSort:'title'}));
+    const desc = titlesOf(so.els.invBody.innerHTML);
+    assert.deepEqual(desc, [...asc].sort((a, b) => b.localeCompare(a, undefined, {numeric:true, sensitivity:'base'})), 'second click sorts Z to A');
+    invClick(so, btn('', {invSort:'best'}));
+    assert.ok(JSON.parse(so.store['grind.studio.v1.view']).invSort.songs.col === 'best', 'sort is remembered');
+    const target = expSongs[0].title;
+    so.handlers.input.forEach(f => f({target:{id:'invQ', value:target.toLowerCase(), dataset:{}, selectionStart:0}}));
+    assert.ok(titlesOf(so.els.invBody.innerHTML).includes(target) && shownRows(so.els.invBody.innerHTML) < expSongs.length, 'the filter narrows the rows');
+    pass('sort by any column (click, click again to reverse, remembered) and filter');
+
+    // drawer
+    const dr = boot({search:'?view=inventory', prefs:{inv:'songs'}});
+    invClick(dr, btn('', {invRow:expSongs[0].key}));
+    const drawer = dr.els.invDrawer.innerHTML;
+    assert.ok(drawer.includes(expSongs[0].title) && /Suno takes/.test(drawer) && /Decisions/.test(drawer) && /Lyric versions/.test(drawer), 'the drawer shows the song in groups');
+    const fieldLabels = [...si.els.page.innerHTML.matchAll(/data-inv-col="[^"]+"[^>]*> ([^<]+)<\/label>/g)].map(m => m[1].trim());
+    assert.equal(fieldLabels.length, chooserBoxes.length); assert.ok(fieldLabels.every(l => drawer.includes('<dt>' + l + '</dt>')), 'the drawer shows every field');
+    invClick(dr, btn('invDrawerClose')); assert.equal(dr.els.invDrawer.hidden, true);
+    const tk = boot({search:'?view=inventory', prefs:{inv:'takes'}}), tkey = Object.keys(MD.takes).find(id => MD.takes[id].type !== 'Stem');
+    invClick(tk, btn('', {invRow:tkey})); assert.ok(tk.els.invDrawer.innerHTML.includes(MD.takes[tkey].title) && /Details/.test(tk.els.invDrawer.innerHTML));
+    pass('row drawer shows every field of one song, and of one take');
+
+    // CSV
+    const csvApp = boot({search:'?view=inventory', prefs:{inv:'songs'}});
+    invClick(csvApp, btn('invCsv'));
+    const vis = csvApp.downloads[0].replace(/^\ufeff/, '').split('\r\n');
+    assert.equal(vis[0], defHeads.join(','), 'visible CSV has exactly the visible columns');
+    assert.equal(vis.length - 1, expSongs.length);
+    invClick(csvApp, btn('invCsvAll'));
+    const all = csvApp.downloads[1].replace(/^\ufeff/, '');
+    assert.ok(all.startsWith('Title,Song id,'), 'everything export has every column');
+    assert.equal(all.split('\r\n')[0].split(',').length, chooserBoxes.length);
+    const ti2 = boot({search:'?view=inventory', prefs:{inv:'takes'}}); invClick(ti2, btn('invCsv'));
+    assert.equal(ti2.downloads[0].split('\r\n').length - 1, rowCount(ti2.els.page.innerHTML), 'take CSV has the visible rows (stems hidden)');
+    invClick(ti2, btn('invCsvAll')); assert.equal(ti2.downloads[1].split('\r\n').length - 1, rowCount(ti2.els.page.innerHTML) + 8, 'everything includes the 8 archived stems');
+    for (const text of [...csvApp.downloads, ...ti2.downloads, si.els.page.innerHTML, drawer, tk.els.invDrawer.innerHTML, ii.els.page.innerHTML]) assert.ok(!text.includes(lyricLine), 'no lyric text in the page, drawer or CSV');
+    pass('CSV: visible columns, everything, take rows; no lyric text in tables, drawer or CSV');
+    console.log(`INVENTORY song columns=${chooserBoxes.length} default=${defHeads.length} take columns=${[...ti.els.page.innerHTML.matchAll(/data-inv-col=/g)].length}`);
+  }
 }

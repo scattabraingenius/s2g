@@ -36,9 +36,12 @@
   try { prefs = JSON.parse(localStorage.getItem(VIEW_KEY)) || {}; } catch (err) {}
   const cleanSort = x => { const d = SORTS.find(r => r[0] === x?.by); return d ? {by:d[0], dir:x.dir === "asc" || x.dir === "desc" ? x.dir : d[3]} : null; };
   const sorts = {songs:cleanSort(prefs.sorts?.songs) || cleanSort({by:prefs.sort}) || {by:"recent", dir:"desc"}, instrumentals:cleanSort(prefs.sorts?.instrumentals) || {by:"recent", dir:"desc"}};
+  // Inventory columns and sorts are remembered on this device only (this view-prefs key; nothing here syncs).
+  const cleanInvSort = x => Object.fromEntries(["songs", "instrumentals", "takes"].filter(t => x?.[t]?.col).map(t => [t, {col:String(x[t].col), dir:x[t].dir === "desc" ? "desc" : "asc"}]));
   const ui = {view:"songs", section:"songs", song:null, version:null, q:"", location:prefs.location || "all", writer:prefs.writer || "all", status:prefs.status || "all", sorts, showStems:!!prefs.showStems,
-    prompts:!!prefs.prompts, takeType:prefs.takeType || "listen", color:prefs.color || "yellow", editing:false, details:new Set(), inv:prefs.inv || "songs", invQ:"", invLimit:200};
-  function savePrefs() { try { localStorage.setItem(VIEW_KEY, JSON.stringify({location:ui.location, writer:ui.writer, status:ui.status, sort:ui.sorts.songs.by, sorts:ui.sorts, showStems:ui.showStems, prompts:ui.prompts, takeType:ui.takeType, color:ui.color, inv:ui.inv})); } catch (err) {} }
+    prompts:!!prefs.prompts, takeType:prefs.takeType || "listen", color:prefs.color || "yellow", editing:false, details:new Set(), inv:prefs.inv || "songs", invQ:"", invLimit:200,
+    invCols:{songs:Array.isArray(prefs.invCols?.songs) ? prefs.invCols.songs.map(String) : null, takes:Array.isArray(prefs.invCols?.takes) ? prefs.invCols.takes.map(String) : null}, invSort:cleanInvSort(prefs.invSort), invOpen:null, chooserOpen:false};
+  function savePrefs() { try { localStorage.setItem(VIEW_KEY, JSON.stringify({location:ui.location, writer:ui.writer, status:ui.status, sort:ui.sorts.songs.by, sorts:ui.sorts, showStems:ui.showStems, prompts:ui.prompts, takeType:ui.takeType, color:ui.color, inv:ui.inv, invCols:ui.invCols, invSort:ui.invSort})); } catch (err) {} }
   function readRoute() {
     const p = new URLSearchParams(location.search);
     const asInstr = p.get("view") === "instrumentals";
@@ -448,7 +451,131 @@
 
   // ---------- Inventory ----------
   const csvCell = v => { let s = String(v ?? ""); if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
-  function inventoryRows() {
+  // ----- Column registry. Every field the data has is a column; nothing here reads lyric text. -----
+  // [id, label, group, type, shown by default, getter]. A getter returns text, a number, a date string or a list.
+  const nameTake = id => M.takes[id]?.title || id;
+  const sunoAll = s => s.clips.filter(c => !isStem(c.id));
+  const liveTakes = s => s.takeIds.filter(id => !isStem(id) && !gone(id));
+  const scoresOf = s => s.takeIds.map(id => takeRating(id).score).filter(Number.isFinite);
+  const reviewed = s => versionsOf(s).filter(v => { const r = lyricRating(v.stem); return r.status || r.songScore != null || r.note || (r.tags || []).length || (r.readiness && r.readiness !== "unassessed"); });
+  const count = (list, f) => list.filter(f).length;
+  const uniq = list => [...new Set(list.filter(Boolean))];
+  const WHERE = {both:"Studio and Suno", local:"Studio only", suno:"Suno only"};
+  const albumNames = s => uniq(s.takeIds.map(id => { const a = albumOf(id); return a && a[1].name.split(" ·")[0]; }));
+  const SONG_COLS = [
+    ["title", "Title", "Identity", "text", true, s => s.title],
+    ["key", "Song id", "Identity", "text", false, s => s.key],
+    ["section", "Section", "Identity", "text", false, s => isInstrumental(s) ? "Instrumental" : "Song"],
+    ["aka", "Also called", "Identity", "text", false, s => M.akaOf(s)],
+    ["prompt", "Beat prompt", "Identity", "text", false, s => s.prompt ? "yes" : ""],
+    ["where", "Where", "Identity", "text", true, s => WHERE[s.location] || ""],
+    ["writers", "Writers", "Identity", "text", true, s => s.writers],
+    ["catStatus", "Catalog status", "Identity", "text", false, s => s.cat?.status || ""],
+    ["written", "Date written", "Dates", "date", false, writtenOf],
+    ["created", "Date created", "Dates", "date", false, createdOf],
+    ["edited", "Last edited", "Dates", "date", false, s => s.cat?.updated || s.latest || null],
+    ["recent", "Recent activity", "Dates", "date", true, s => s.latest || null],
+    ["firstTake", "First Suno take", "Dates", "date", false, s => earliest(sunoTimes(s))],
+    ["latestTake", "Latest Suno take", "Dates", "date", false, s => latestOf(sunoTimes(s))],
+    ["catUpdated", "Catalog updated", "Dates", "date", false, s => s.cat?.updated || null],
+    ["lyricVersions", "Lyric versions", "Lyrics", "num", true, s => isInstrumental(s) ? 0 : versionsOf(s).length],
+    ["copies", "My copies", "Lyrics", "num", false, s => count(versionsOf(s), v => v.custom)],
+    ["sung", "Has sung words", "Lyrics", "text", false, s => isInstrumental(s) ? "no" : "yes"],
+    ["lyricSessions", "Lyric sessions", "Lyrics", "text", false, s => uniq(versionsOf(s).map(v => v.session))],
+    ["lyricWriters", "Lyric writers", "Lyrics", "text", false, s => uniq(versionsOf(s).map(v => v.writer))],
+    ["catVersions", "Catalog versions", "Lyrics", "text", false, s => s.cat?.versions || []],
+    ["batches", "Batches", "Lyrics", "text", false, s => s.cat?.batches || []],
+    ["packetsOk", "Packets complete", "Lyrics", "num", false, s => s.cat?.packets?.complete ?? null],
+    ["packetsInc", "Packets incomplete", "Lyrics", "num", false, s => s.cat?.packets?.incomplete ?? null],
+    ["reviewed", "Reviewed lyric versions", "Lyric review", "num", false, s => reviewed(s).length],
+    ["lyricStatuses", "Lyric statuses", "Lyric review", "text", false, s => uniq(versionsOf(s).map(v => LYRIC_STATUSES.find(([k]) => k === lyricRating(v.stem).status)?.[1]))],
+    ["lyricTags", "Lyric tags", "Lyric review", "text", false, s => uniq(versionsOf(s).flatMap(v => lyricRating(v.stem).tags || []))],
+    ["lyricReady", "Lyric readiness", "Lyric review", "text", false, s => uniq(versionsOf(s).map(v => lyricRating(v.stem).readiness).filter(x => x && x !== "unassessed"))],
+    ["lyricNotes", "Lyric notes", "Lyric review", "num", false, s => count(versionsOf(s), v => lyricRating(v.stem).note)],
+    ["lyricScore", "Best lyric score", "Lyric review", "num", false, s => { const n = versionsOf(s).map(v => lyricRating(v.stem).songScore).filter(Number.isFinite); return n.length ? Math.max(...n) : null; }],
+    ["boardTakes", "Takes on board", "Suno takes", "num", true, s => count(s.takeIds, id => !isStem(id))],
+    ["activeTakes", "Active takes", "Suno takes", "num", false, s => liveTakes(s).length],
+    ["vocalTakes", "Vocal takes", "Suno takes", "num", false, s => count(s.takeIds, id => M.takes[id].type === "Vocal")],
+    ["instrTakes", "Instrumental takes", "Suno takes", "num", false, s => count(s.takeIds, id => M.takes[id].type === "Instrumental")],
+    ["stemTakes", "Archived stem takes", "Suno takes", "num", false, s => count(s.takeIds, isStem)],
+    ["newTakes", "New on Suno", "Suno takes", "num", false, s => s.newTakes],
+    ["trashedTakes", "Trashed on Suno", "Suno takes", "num", false, s => s.trashedTakes],
+    ["rejectedTakes", "Rejected on Suno", "Suno takes", "num", false, s => count(s.clips, c => c.rejected)],
+    ["deletedTakes", "Deleted from board", "Suno takes", "num", false, s => count(s.takeIds, gone)],
+    ["clips", "Suno clips", "Suno takes", "num", false, s => s.clips.length],
+    ["totalLen", "Total length (s)", "Suno takes", "num", false, s => Math.round(sunoAll(s).reduce((n, c) => n + (c.duration || 0), 0)) || null],
+    ["longest", "Longest take (s)", "Suno takes", "num", false, s => Math.round(Math.max(0, ...sunoAll(s).map(c => c.duration || 0))) || null],
+    ["models", "Models", "Suno takes", "text", false, s => uniq([...s.takeIds.map(id => M.takes[id].model), ...s.clips.map(c => c.model)])],
+    ["modes", "Modes", "Suno takes", "text", false, s => uniq(s.clips.map(c => c.mode))],
+    ["best", "Best score", "Scores", "num", true, bestScore],
+    ["avg", "Average take score", "Scores", "num", false, s => { const n = scoresOf(s); return n.length ? Math.round(n.reduce((a, b) => a + b, 0) / n.length) : null; }],
+    ["scored", "Scored takes", "Scores", "num", false, s => scoresOf(s).length],
+    ["unscored", "Unscored takes", "Scores", "num", false, s => count(s.takeIds, id => !isStem(id) && !Number.isFinite(takeRating(id).score))],
+    ["picks", "Takes in Album picks", "Albums", "num", false, s => count(s.takeIds, id => plan().considered?.[id])],
+    ["onAlbum", "Takes on an album", "Albums", "num", false, s => count(s.takeIds, albumOf)],
+    ["albums", "Albums", "Albums", "text", false, albumNames],
+    ["status", "Song status", "Decisions", "text", true, s => SONG_STATUSES.find(([k]) => k === songStatus(s))[1]],
+    ["chosenTake", "Chosen take", "Decisions", "text", false, s => decision(s.key).chosen ? nameTake(decision(s.key).chosen) : ""],
+    ["chosenLyric", "Chosen lyric", "Decisions", "text", false, s => { const v = versionsOf(s).find(x => x.stem === decision(s.key).lyric); return v ? M.versionLabel(v) : ""; }],
+    ["next", "Next action", "Decisions", "text", false, s => decision(s.key).next || ""],
+    ["notes", "Song notes", "Decisions", "text", false, s => decision(s.key).notes || ""],
+    ["files", "Studio files", "Studio", "num", false, s => s.cat?.files ?? null],
+    ["suggest", "Possible duplicates", "Studio", "text", false, s => (s.cat?.suggestions || []).map(x => M.bySong[x.key]?.title).filter(Boolean)],
+    ["archivedOnly", "Archived only", "Studio", "text", false, s => s.cat?.archivedOnly ? "yes" : ""],
+  ];
+  // A take row is {stem, t (board take) or clip (newer on Suno), song, title, base, type, writer, created, duration, model, mode, where}.
+  const takeAlbum = r => (r.stem ? albumOf(r.stem) : null);
+  const takeItem = r => (r.stem ? plan().considered?.[r.stem] : null);
+  const TAKE_COLS = [
+    ["title", "Suno take", "Take", "text", true, r => r.title],
+    ["song", "Song", "Take", "text", true, r => r.song?.title || r.base || ""],
+    ["section", "Section", "Take", "text", false, r => r.song ? (isInstrumental(r.song) ? "Instrumental" : "Song") : ""],
+    ["type", "Type", "Take", "text", true, r => r.type],
+    ["writer", "Writer", "Take", "text", true, r => r.writer],
+    ["created", "Created", "Take", "date", true, r => r.created || null],
+    ["len", "Length (s)", "Take", "num", true, r => r.duration ? Math.round(r.duration) : null],
+    ["model", "Model", "Take", "text", false, r => r.model],
+    ["mode", "Mode", "Take", "text", false, r => r.mode],
+    ["where", "Where", "Take", "text", true, r => r.where],
+    ["score", "Score", "Take", "num", true, r => r.t ? takeRating(r.stem).score ?? null : null],
+    ["ready", "Readiness", "Take", "text", false, r => r.t ? takeRating(r.stem).readiness || "" : ""],
+    ["note", "Take note", "Take", "text", false, r => r.t ? takeRating(r.stem).note || "" : ""],
+    ["album", "Album", "Albums", "text", true, r => { const a = takeAlbum(r); return a ? a[1].name.split(" ·")[0] : ""; }],
+    ["albumPos", "Album position", "Albums", "num", false, r => { const a = takeAlbum(r); return a ? a[1].order.indexOf(r.stem) + 1 : null; }],
+    ["picks", "In Album picks", "Albums", "text", false, r => takeItem(r) ? "yes" : ""],
+    ["del", "Delete tag", "Albums", "text", false, r => { const i = takeItem(r); return i?.delDone ? "done" : i?.del ? "tagged" : ""; }],
+    ["id", "Take id", "Details", "text", false, r => r.stem || ""],
+    ["version", "Version", "Details", "text", false, r => r.t?.version ?? ""],
+    ["takeNo", "Take number", "Details", "text", false, r => r.t?.take ?? ""],
+    ["session", "Session", "Details", "text", false, r => r.t?.session || ""],
+    ["source", "Source", "Details", "text", false, r => r.t?.source || ""],
+    ["match", "Match", "Details", "text", false, r => r.t?.match || ""],
+    ["packet", "Packet version", "Details", "text", false, r => r.t?.packetVersion ?? ""],
+    ["oldTitle", "Previous title", "Details", "text", false, r => r.t?.oldTitle || ""],
+    ["voice", "Voice name", "Details", "text", false, r => r.t?.voiceName || ""],
+    ["personal", "Personal voice", "Details", "text", false, r => r.t?.personalVoice ? "yes" : ""],
+    ["voiceChecked", "Voice checked", "Details", "text", false, r => r.t?.voiceChecked ? "yes" : ""],
+    ["lyricVersion", "Lyric version", "Details", "text", false, r => r.t?.lyricStem || ""],
+    ["style", "Suno style", "Details", "text", false, r => r.t?.suno?.style || ""],
+  ];
+  const COLS = {songs:SONG_COLS, instrumentals:SONG_COLS, takes:TAKE_COLS};
+  const colFor = tab => COLS[tab] || SONG_COLS;
+  const colSet = tab => tab === "takes" ? "takes" : "songs";   // Songs and Instrumentals share one column choice
+  // ui.invCols[set] is null (use the defaults) or the list of visible column ids. Saved on this device only.
+  function visibleCols(tab) { const chosen = ui.invCols[colSet(tab)]; return colFor(tab).filter(c => chosen ? chosen.includes(c[0]) : c[4]); }
+  const cellText = v => Array.isArray(v) ? v.join("; ") : v == null ? "" : String(v);
+  const shownCell = (c, v) => c[3] === "date" ? cellText(v).slice(0, 10) : cellText(v);
+
+  // ----- Rows for each tab -----
+  function songRows(tab) {
+    return M.songs.filter(s => (tab === "instrumentals") === isInstrumental(s) && (ui.prompts || !s.prompt)).map(s => ({key:s.key, s}));
+  }
+  function takeRows({everything = false} = {}) {
+    const board = Object.values(M.takes).filter(t => everything || t.type !== "Stem" || ui.showStems).map(t => ({key:M.songOfTake[t.stem], stem:t.stem, t, song:M.bySong[M.songOfTake[t.stem]], title:t.title, base:t.baseTitle, type:t.type, writer:t.writer, created:t.createdAt, duration:t.duration, model:t.model, mode:"", where:gone(t.stem) ? "Deleted on Suno" : "On the board"}));
+    const clips = M.songs.flatMap(s => s.clips.filter(c => !c.onBoard).map(c => ({key:s.key, stem:c.id, clip:c, song:s, title:c.title, base:c.base, type:"", writer:c.writer, created:c.created, duration:c.duration, model:c.model, mode:c.mode || "", where:c.trashed ? "Trashed on Suno" : "Newer on Suno"})));
+    return [...board, ...clips];
+  }
+  function fileRows() {
     const cat = L.catalog;
     if (ui.inv === "files" && cat) {
       const songOf = Object.fromEntries((cat.songs || []).flatMap(s => (s.file_ids || []).map(id => [id, s.id])));
@@ -458,14 +585,41 @@
     }
     if (ui.inv === "playlists" && cat) return {head:["Playlist", "Tracks reported", "Owned", "Checked"],
       rows:(cat.playlists || []).map(p => ({url:p.url, cells:[p.name, p.song_count ?? "", p.owned ? "yes" : "not confirmed", (p.checked || "").slice(0, 16).replace("T", " ")]}))};
-    if (["files", "playlists", "coverage"].includes(ui.inv) && !cat) return {head:["Loading"], rows:[]};
-    if (ui.inv === "songs") return {head:["Song", "Where", "Song status", "Writers", "Lyric versions", "Board takes", "New on Suno", "Trashed", "Studio files", "Best score", "Latest"],
-      rows:M.songs.filter(s => ui.prompts || !s.prompt).map(s => ({key:s.key, cells:[s.title, {both:"Studio and Suno", local:"Studio only", suno:"Suno only"}[s.location], SONG_STATUSES.find(([k]) => k === songStatus(s))[1], s.writers.join(", "), versionsOf(s).length, s.takeIds.length, s.newTakes, s.trashedTakes, s.cat?.files ?? "", bestScore(s) ?? "", (s.latest || "").slice(0, 10)]}))};
-    const albumName = id => plan().albums?.[id]?.name.split(" ·")[0];
-    const board = Object.values(M.takes).filter(t => t.type !== "Stem" || ui.showStems).map(t => { const a = albumOf(t.stem); return {key:M.songOfTake[t.stem], stem:t.stem, cells:[t.title, M.bySong[M.songOfTake[t.stem]]?.title || t.baseTitle, t.type, t.writer, dur(t.duration), (t.createdAt || "").slice(0, 10), takeRating(t.stem).score ?? "", a ? albumName(a[0]) + " #" + (a[1].order.indexOf(t.stem) + 1) : "", gone(t.stem) ? "Deleted on Suno" : "On the board"]}; });
-    const clips = M.songs.flatMap(s => s.clips.filter(c => !c.onBoard).map(c => ({key:s.key, stem:c.id, cells:[c.title, s.title, c.mode || "", c.writer, dur(c.duration), (c.created || "").slice(0, 10), "", "", c.trashed ? "Trashed on Suno" : "Newer on Suno"]})));
-    return {head:["Suno take", "Song", "Type", "Writer", "Length", "Created", "Score", "On album", "Where"], rows:[...board, ...clips].sort((a, b) => String(b.cells[5]).localeCompare(String(a.cells[5])))};
+    return {head:["Loading"], rows:[]};
   }
+  const isLocalTab = tab => ["files", "playlists", "coverage"].includes(tab);
+  const rowSource = (tab, r) => tab === "takes" ? r : r.s;
+  // A table is {cols, rows}; each row carries the raw value per column, so sorting, the screen and the CSV agree.
+  function tableFor(tab, {everything = false} = {}) {
+    if (isLocalTab(tab)) { const {head, rows} = fileRows(); return {local:true, cols:head.map((h, i) => [String(i), h, "", "text"]), rows:rows.map(r => ({...r, vals:r.cells}))}; }
+    const cols = everything ? colFor(tab) : visibleCols(tab);
+    const src = tab === "takes" ? takeRows({everything}) : everything ? M.songs.filter(s => (tab === "instrumentals") === isInstrumental(s)).map(s => ({key:s.key, s})) : songRows(tab);
+    return {cols, rows:src.map(r => ({...r, vals:cols.map(c => c[5](rowSource(tab, r)))}))};
+  }
+  function filterRows(tab, rows) {
+    const q = ui.invQ.trim().toLowerCase(); if (!q) return rows;
+    // Looks at every column of the row, not just the visible ones, and never at lyric text.
+    if (isLocalTab(tab)) return rows.filter(r => r.cells.join(" ").toLowerCase().includes(q));
+    return rows.filter(r => colFor(tab).some(c => cellText(c[5](rowSource(tab, r))).toLowerCase().includes(q)));
+  }
+  function sortRows(tab, cols, rows) {
+    const cur = ui.invSort[tab], i = cur ? cols.findIndex(c => c[0] === cur.col) : -1; if (i < 0) return rows;
+    const type = cols[i][3], sign = cur.dir === "asc" ? 1 : -1;
+    const val = r => { const v = r.vals[i]; return v == null || v === "" || (Array.isArray(v) && !v.length) ? null : Array.isArray(v) ? v.join("; ") : v; };
+    return [...rows].sort((a, b) => {
+      const x = val(a), y = val(b);
+      if (x == null && y == null) return 0;
+      if (x == null) return 1;
+      if (y == null) return -1;
+      return (type === "num" ? Number(x) - Number(y) : String(x).localeCompare(String(y), undefined, {numeric:true, sensitivity:"base"})) * sign;
+    });
+  }
+  const csvOf = (cols, rows) => "\ufeff" + [cols.map(c => c[1]), ...rows.map(r => r.vals.map((v, i) => shownCell(cols[i], v)))].map(r => r.map(csvCell).join(",")).join("\r\n");
+  function downloadCsv(name, text) {
+    const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([text], {type:"text/csv"})); link.download = name; link.click(); URL.revokeObjectURL(link.href);
+  }
+  // The rows currently shown (filtered and sorted) for a tab.
+  function shownTable(tab) { const t = tableFor(tab); return {...t, rows:sortRows(tab, t.cols, filterRows(tab, t.rows))}; }
   function coverageHtml() {
     const cat = L.catalog; if (!cat) return `<p class="hint">${L.error ? esc(L.error) : "Loading the catalog…"}</p>`;
     const src = cat.coverage?.sources || {};
@@ -474,23 +628,75 @@
       ${(cat.coverage?.excluded || []).length ? `<h3 class="sub">Not scanned</h3><ul class="sources">${cat.coverage.excluded.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
       <p class="hint">Catalog built ${esc((cat.built || "").slice(0, 16).replace("T", " "))} with ${esc(cat.sunox_version || "Sunox")}. Every Suno request is read-only.</p>`;
   }
-  const invTabs = () => [["songs", "Songs"], ["takes", "Every Suno take"], ...(L.enabled ? [["files", "Studio files"], ["playlists", "Playlists"], ["coverage", "Coverage"]] : [])].map(([k, l]) => `<button class="chip" role="tab" aria-pressed="${ui.inv === k}" data-inv="${k}">${l}</button>`).join("") + (L.enabled ? '<button class="btn small" id="invRefresh" title="Re-scan the Studio and read Suno again (read-only)">Refresh inventory</button>' : "");
+  function invTableHtml() {
+    const tab = ui.inv, t = shownTable(tab), total = tableFor(tab).rows.length, cur = ui.invSort[tab];
+    const head = t.cols.map(c => {
+      const on = cur?.col === c[0];
+      return `<th${on ? ` aria-sort="${cur.dir === "asc" ? "ascending" : "descending"}"` : ""}>${t.local ? esc(c[1]) : `<button class="th-sort" data-inv-sort="${esc(c[0])}" title="Sort by ${esc(c[1])}">${esc(c[1])}${on ? (cur.dir === "asc" ? " ↑" : " ↓") : ""}</button>`}</th>`;
+    }).join("");
+    const body = t.rows.slice(0, ui.invLimit).map(r => {
+      const id = tab === "takes" ? r.stem : r.key, openable = !t.local;
+      return `<tr${openable ? ` data-inv-row="${esc(id)}"` : ""}${r.stem && openable ? ` data-take="${esc(r.stem)}"` : ""}>${r.vals.map((v, i) => {
+        const text = shownCell(t.cols[i], v);
+        if (i !== 0) return `<td${t.cols[i][3] === "num" ? ' class="num"' : ""}>${esc(text)}</td>`;
+        return `<td>${r.url ? `<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(text)}</a>` : r.file ? `<a href="${esc(L.fileUrl(r.file))}" target="_blank" rel="noopener"><code>${esc(text)}</code></a>${r.key ? ` <button class="linkish" data-song="${esc(r.key)}">song</button>` : ""}` : `<button class="linkish" data-inv-row="${esc(id)}">${esc(text)}</button>`}</td>`;
+      }).join("")}</tr>`;
+    }).join("");
+    return `<p class="hint" id="invHint">${t.rows.length} of ${total} rows.${LOCAL ? "" : " Studio files, playlists and coverage appear when the board is opened from the local catalog server."}</p>
+      <div class="table-wrap"><table class="inv-table"><thead><tr>${head}</tr></thead><tbody>${body || `<tr><td colspan="${t.cols.length || 1}" class="empty-note">No rows match.</td></tr>`}</tbody></table></div>
+      ${t.rows.length > ui.invLimit ? `<button class="btn small" id="invMore">Show ${Math.min(200, t.rows.length - ui.invLimit)} more</button>` : ""}`;
+  }
+  function chooserHtml() {
+    const tab = ui.inv, all = colFor(tab), on = new Set(visibleCols(tab).map(c => c[0])), groups = [...new Set(all.map(c => c[2]))];
+    return `<details class="col-chooser" id="colChooser"${ui.chooserOpen ? " open" : ""}><summary>Columns (${on.size} of ${all.length})</summary>
+      <div class="col-actions"><button class="btn small" id="colsAll">Show all</button><button class="btn small" id="colsReset">Reset to default</button></div>
+      <div class="col-groups">${groups.map(g => `<fieldset><legend>${esc(g)}</legend>${all.filter(c => c[2] === g).map(c => `<label class="check"><input type="checkbox" data-inv-col="${esc(c[0])}"${on.has(c[0]) ? " checked" : ""}> ${esc(c[1])}</label>`).join("")}</fieldset>`).join("")}</div></details>`;
+  }
+  // The detail drawer: everything on one song or one take, in groups. No lyric text.
+  const dl = rows => `<dl class="drawer-grid">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>`;
+  function songDrawer(s) {
+    const groups = [...new Set(SONG_COLS.map(c => c[2]))];
+    const takes = s.takeIds.filter(id => ui.showStems || !isStem(id)).map(id => { const t = M.takes[id], r = takeRating(id), a = albumOf(id);
+      return `<tr><td>${esc(t.title)}</td><td>${esc(t.type)}</td><td>${esc(t.writer)}</td><td>${esc((t.createdAt || "").slice(0, 10))}</td><td class="num">${esc(dur(t.duration))}</td><td class="num">${esc(r.score ?? "")}</td><td>${esc(a ? a[1].name.split(" ·")[0] + " #" + (a[1].order.indexOf(id) + 1) : "")}</td><td>${esc(gone(id) ? "Deleted on Suno" : "On the board")}</td></tr>`; }).join("");
+    const clips = s.clips.filter(c => !c.onBoard).map(c => `<tr><td>${esc(c.title)}</td><td>${esc(c.mode || "")}</td><td>${esc(c.writer)}</td><td>${esc((c.created || "").slice(0, 10))}</td><td class="num">${esc(dur(c.duration))}</td><td></td><td></td><td>${esc(c.trashed ? "Trashed on Suno" : "Newer on Suno")}</td></tr>`).join("");
+    const versions = versionsOf(s).map(v => [M.versionLabel(v), [v.writer, v.session, v.custom ? "my copy" : "", v.chars ? v.chars + " characters" : ""].filter(Boolean).join(" · ")]);
+    return `<div class="drawer-head"><div><b>${esc(s.title)}</b><small>${esc(isInstrumental(s) ? "Instrumental" : "Song")}</small></div><div><button class="btn small" data-song="${esc(s.key)}">Open song page</button> <button class="btn small" id="invDrawerCsv" title="Every field of this song as a CSV file">Export this song</button> <button class="btn small" id="invDrawerClose" aria-label="Close details">Close</button></div></div>
+      ${groups.map(g => `<section><h4>${esc(g)}</h4>${dl(SONG_COLS.filter(c => c[2] === g).map(c => [c[1], shownCell(c, c[5](s)) || "–"]))}</section>`).join("")}
+      ${versions.length ? `<section><h4>Lyric versions (names only, no text)</h4>${dl(versions)}</section>` : ""}
+      <section><h4>Suno takes</h4><div class="table-wrap"><table class="inv-table"><thead><tr><th>Take</th><th>Type or mode</th><th>Writer</th><th>Created</th><th>Length</th><th>Score</th><th>Album</th><th>Where</th></tr></thead><tbody>${takes + clips || '<tr><td colspan="8" class="empty-note">No takes.</td></tr>'}</tbody></table></div></section>
+      ${L.enabled && L.filesBySong && s.cat ? `<section><h4>Studio files (this computer)</h4>${dl((L.filesBySong[s.cat.id] || []).map(f => [f.kind || "file", f.path]))}</section>` : ""}`;
+  }
+  function takeDrawer(stem) {
+    const r = takeRows({everything:true}).find(x => x.stem === stem); if (!r) return "";
+    const groups = [...new Set(TAKE_COLS.map(c => c[2]))];
+    return `<div class="drawer-head"><div><b>${esc(r.title)}</b><small>${esc(r.song?.title || "")}</small></div><div>${r.key ? `<button class="btn small" data-song="${esc(r.key)}">Open song page</button> ` : ""}<button class="btn small" id="invDrawerClose" aria-label="Close details">Close</button></div></div>
+      ${groups.map(g => `<section><h4>${esc(g)}</h4>${dl(TAKE_COLS.filter(c => c[2] === g).map(c => [c[1], shownCell(c, c[5](r)) || "–"]))}</section>`).join("")}`;
+  }
+  function renderDrawer() {
+    const box = $("invDrawer"); if (!box) return;
+    const id = ui.invOpen, html = !id ? "" : ui.inv === "takes" ? takeDrawer(id) : M.bySong[id] ? songDrawer(M.bySong[id]) : "";
+    box.hidden = !html; box.innerHTML = html;
+  }
+  const invTabs = () => [["songs", "Songs"], ["instrumentals", "Instrumentals"], ["takes", "Every Suno take"], ...(L.enabled ? [["files", "Studio files"], ["playlists", "Playlists"], ["coverage", "Coverage"]] : [])].map(([k, l]) => `<button class="chip" role="tab" aria-pressed="${ui.inv === k}" data-inv="${k}">${l}</button>`).join("") + (L.enabled ? '<button class="btn small" id="invRefresh" title="Re-scan the Studio and read Suno again (read-only)">Refresh inventory</button>' : "");
   function renderInventory() {
-    if (!L.enabled && ["files", "playlists", "coverage"].includes(ui.inv)) ui.inv = "songs";
-    if (ui.inv === "coverage") { $("page").innerHTML = `<div class="inventory"><h1>Inventory</h1><div class="tools"><div class="seg-tabs" role="tablist">${invTabs()}</div></div>${coverageHtml()}</div>`; return; }
-    const {head, rows} = inventoryRows(), q = ui.invQ.trim().toLowerCase();
-    const shown = q ? rows.filter(r => r.cells.join(" ").toLowerCase().includes(q)) : rows;
+    if (!["songs", "instrumentals", "takes", "files", "playlists", "coverage"].includes(ui.inv) || (!L.enabled && isLocalTab(ui.inv))) ui.inv = "songs";
+    const tab = ui.inv, local = isLocalTab(tab);
+    if (tab === "coverage") { $("page").innerHTML = `<div class="inventory"><h1>Inventory</h1><div class="tools"><div class="seg-tabs" role="tablist">${invTabs()}</div></div>${coverageHtml()}</div>`; return; }
     $("page").innerHTML = `<div class="inventory">
       <h1>Inventory</h1>
+      <p class="hint">Everything the Studio knows about each song, in one table. Choose the columns, sort by any of them, click a row for all of its data. Lyric text is never shown or exported here. Column choices stay on this device.</p>
       <div class="tools"><div class="seg-tabs" role="tablist">${invTabs()}</div>
-        ${ui.inv === "takes" && stemCount() ? `<label class="check stems-toggle"><input type="checkbox" id="showStems"${ui.showStems ? " checked" : ""}> Show archived stems (${stemCount()})</label>` : ""}
-        <input type="search" id="invQ" value="${esc(ui.invQ)}" placeholder="Filter rows" aria-label="Filter rows"><button class="btn small" id="invCsv">Export CSV</button></div>
-      <p class="hint">${shown.length} of ${rows.length} rows.${LOCAL ? "" : " Studio files, playlists and coverage appear when the board is opened from the local catalog server."}</p>
-      <div class="table-wrap"><table class="inv-table"><thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join("")}</tr></thead>
-      <tbody>${shown.slice(0, ui.invLimit).map(r => `<tr${r.url || r.file ? "" : ` data-song="${esc(r.key || "")}"`}${r.stem ? ` data-take="${esc(r.stem)}"` : ""}>${r.cells.map((c, i) => `<td>${i !== 0 ? esc(c) : r.url ? `<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(c)}</a>` : r.file ? `<a href="${esc(L.fileUrl(r.file))}" target="_blank" rel="noopener"><code>${esc(c)}</code></a>${r.key ? ` <button class="linkish" data-song="${esc(r.key)}">song</button>` : ""}` : `<button class="linkish">${esc(c)}</button>`}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
-      ${shown.length > ui.invLimit ? `<button class="btn small" id="invMore">Show ${Math.min(200, shown.length - ui.invLimit)} more</button>` : ""}
+        ${tab === "takes" && stemCount() ? `<label class="check stems-toggle"><input type="checkbox" id="showStems"${ui.showStems ? " checked" : ""}> Show archived stems (${stemCount()})</label>` : ""}
+        ${tab === "instrumentals" ? `<label class="check stems-toggle"><input type="checkbox" id="fPrompts"${ui.prompts ? " checked" : ""}> Show beat prompts</label>` : ""}
+        <input type="search" id="invQ" value="${esc(ui.invQ)}" placeholder="Filter rows (searches every field)" aria-label="Filter rows">
+        ${local ? '<button class="btn small" id="invCsv">Export CSV</button>' : '<button class="btn small" id="invCsv" title="The columns you can see now, in the order shown">Export CSV (visible columns)</button><button class="btn small" id="invCsvAll" title="Every column and every row, stems and beat prompts included">Export CSV (everything)</button>'}</div>
+      ${local ? "" : chooserHtml()}
+      <div id="invBody">${invTableHtml()}</div>
+      <aside class="inv-drawer" id="invDrawer" hidden aria-label="Details"></aside>
     </div>`;
+    renderDrawer();
   }
+  function refreshInvBody() { const b = $("invBody"); if (b) b.innerHTML = invTableHtml(); }
 
   // ---------- render ----------
   function renderMain() {
@@ -573,7 +779,7 @@
       ui.details.add(stem); go({view:"songs", song, version:M.takes[stem]?.lyricStem || null}); return;
     }
     const cp = e.target.closest?.("[data-copy-path]"); if (cp) { copyText(cp.dataset.copyPath, "path"); return; }
-    const t = e.target.closest("[data-view],#fSortDir,[data-song],[data-version],[data-song-back],[data-edit],[data-color],[data-color-names],[data-lyric-undo],[data-copy],[data-choose],[data-details],[data-consider],[data-lyric-status],[data-lyric-tag],[data-del-mark],[data-del-copy],[data-save-studio],[data-inv],#invCsv,#invMore,#studioRetry,#dataBtn,#dataClose,#lyricExport,#reviewExport,#studioExport,#lyricImport,#colorSave,#colorCancel");
+    const t = e.target.closest("[data-view],#fSortDir,[data-song],[data-version],[data-song-back],[data-edit],[data-color],[data-color-names],[data-lyric-undo],[data-copy],[data-choose],[data-details],[data-consider],[data-lyric-status],[data-lyric-tag],[data-del-mark],[data-del-copy],[data-save-studio],[data-inv],[data-inv-sort],[data-inv-row],#invCsv,#invCsvAll,#invDrawerCsv,#invDrawerClose,#colsAll,#colsReset,#invMore,#studioRetry,#dataBtn,#dataClose,#lyricExport,#reviewExport,#studioExport,#lyricImport,#colorSave,#colorCancel");
     if (!t) return;
     if (t.id === "studioRetry") return stores.retry();
     if (t.id === "invRefresh") {
@@ -592,13 +798,25 @@
       const labels = Object.fromEntries([...document.querySelectorAll("#colorFields input")].map(i => [i.dataset.colorKey, i.value.trim().slice(0, 50) || Object.fromEntries(R.colors)[i.dataset.colorKey]]));
       stores.setLyric("__review_preferences__", {colorLabels:labels}); $("colorDialog").close(); renderSongPage(); return;
     }
-    if (t.dataset.inv) { ui.inv = t.dataset.inv; ui.invLimit = 200; savePrefs(); return renderInventory(); }
-    if (t.id === "invMore") { ui.invLimit += 200; return renderInventory(); }
-    if (t.id === "invCsv") {
-      const {head, rows} = inventoryRows(), q = ui.invQ.trim().toLowerCase(), shown = q ? rows.filter(r => r.cells.join(" ").toLowerCase().includes(q)) : rows;
-      const text = "﻿" + [head, ...shown.map(r => r.cells)].map(r => r.map(csvCell).join(",")).join("\r\n");
-      const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([text], {type:"text/csv"})); link.download = `studio-${ui.inv}.csv`; link.click(); URL.revokeObjectURL(link.href); return;
+    if (t.dataset.inv) { ui.inv = t.dataset.inv; ui.invLimit = 200; ui.invOpen = null; savePrefs(); return renderInventory(); }
+    if (t.id === "invMore") { ui.invLimit += 200; return refreshInvBody(); }
+    if (t.dataset.invSort) {
+      const cur = ui.invSort[ui.inv], col = colFor(ui.inv).find(c => c[0] === t.dataset.invSort);
+      ui.invSort[ui.inv] = cur?.col === col[0] ? {col:col[0], dir:cur.dir === "asc" ? "desc" : "asc"} : {col:col[0], dir:col[3] === "text" ? "asc" : "desc"};
+      ui.invLimit = 200; savePrefs(); return refreshInvBody();
     }
+    if (t.dataset.invRow !== undefined) { ui.invOpen = t.dataset.invRow; renderDrawer(); $("invDrawer")?.scrollIntoView?.({block:"nearest"}); return; }
+    if (t.id === "invDrawerClose") { ui.invOpen = null; return renderDrawer(); }
+    if (t.id === "invDrawerCsv") {
+      const s = M.bySong[ui.invOpen]; if (!s) return;
+      downloadCsv(`studio-song-${s.key}.csv`, csvOf(SONG_COLS, [{vals:SONG_COLS.map(c => c[5](s))}])); return;
+    }
+    if (t.id === "colsAll" || t.id === "colsReset") {
+      ui.invCols[colSet(ui.inv)] = t.id === "colsAll" ? colFor(ui.inv).map(c => c[0]) : null;
+      savePrefs(); ui.chooserOpen = true; renderInventory(); return;
+    }
+    if (t.id === "invCsv") { const tb = shownTable(ui.inv); return downloadCsv(`studio-${ui.inv}-visible.csv`, csvOf(tb.cols, tb.rows)); }
+    if (t.id === "invCsvAll") { const tb = tableFor(ui.inv, {everything:true}); return downloadCsv(`studio-${ui.inv}-everything.csv`, csvOf(tb.cols, tb.rows)); }
     if (t.dataset.view === "instrumentals") return go({view:"songs", section:"instrumentals"});
     if (t.dataset.view === "songs" && t.matches(".rail-item,.stat")) return go({view:"songs", section:"songs"});
     if (t.id === "fSortDir") { const cur = ui.sorts[ui.section]; cur.dir = cur.dir === "asc" ? "desc" : "asc"; savePrefs(); return renderList(); }
@@ -644,7 +862,7 @@
   document.addEventListener("input", e => {
     const t = e.target;
     if (t.id === "songQ") { ui.q = t.value; return renderList(); }
-    if (t.id === "invQ") { ui.invQ = t.value; ui.invLimit = 200; const pos = t.selectionStart; renderInventory(); const n = $("invQ"); n.focus(); n.setSelectionRange(pos, pos); return; }
+    if (t.id === "invQ") { ui.invQ = t.value; ui.invLimit = 200; return refreshInvBody(); }
     if (t.dataset.ed) return onEditorInput(t);
     const key = ui.song;
     if (t.dataset.songText) { const f = t.dataset.songText, val = t.value; return debounce("song:" + f, () => saveSong(key, {[f]:val})); }
@@ -662,6 +880,14 @@
     if (t.id === "fWriter") { ui.writer = t.value; savePrefs(); return renderList(); }
     if (t.id === "fStatus") { ui.status = t.value; savePrefs(); return renderList(); }
     if (t.id === "fSort") { const d = SORTS.find(r => r[0] === t.value); ui.sorts[ui.section] = {by:d[0], dir:d[3]}; savePrefs(); return renderList(); }
+    if (t.dataset.invCol) {
+      const set = colSet(ui.inv), cur = new Set(visibleCols(ui.inv).map(c => c[0]));
+      t.checked ? cur.add(t.dataset.invCol) : cur.delete(t.dataset.invCol);
+      if (!cur.size) { cur.add(colFor(ui.inv)[0][0]); t.checked = t.dataset.invCol === colFor(ui.inv)[0][0]; }
+      ui.invCols[set] = colFor(ui.inv).map(c => c[0]).filter(id => cur.has(id));   // keeps the table's own column order
+      ui.chooserOpen = true; savePrefs(); const sum = document.querySelector?.("#colChooser summary"); if (sum) sum.textContent = `Columns (${cur.size} of ${colFor(ui.inv).length})`;
+      return refreshInvBody();
+    }
     if (t.id === "showStems") { ui.showStems = t.checked; savePrefs(); return ui.view === "inventory" ? renderInventory() : renderSongPage(); }
     if (t.id === "fPrompts") { ui.prompts = t.checked; savePrefs(); renderRail(); return ui.view === "inventory" ? renderInventory() : renderList(); }
     if (t.id === "takeType") { ui.takeType = t.value; savePrefs(); return renderSongPage(); }
@@ -684,6 +910,7 @@
     if (e.target.closest?.(".song-row") && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); return go({view:"songs", song:e.target.closest(".song-row").dataset.song}); }
     if (e.ctrlKey || e.metaKey || e.altKey || e.target.closest?.("input,textarea,select,[contenteditable]") || document.querySelector("dialog[open]")) return;
     if (e.key === "/") { e.preventDefault(); if (ui.view !== "songs") go({view:"songs"}); $("songQ").focus(); $("songQ").select(); }
+    else if (e.key === "Escape" && ui.view === "inventory" && ui.invOpen) { ui.invOpen = null; renderDrawer(); }
     else if (e.key === "Escape" && ui.view === "songs" && ui.song && !ui.editing && !document.querySelector(".menu:not(.hidden)")) go({song:null});
     else if (e.key === "[" || e.key === "]") {
       if (ui.view !== "songs") return;

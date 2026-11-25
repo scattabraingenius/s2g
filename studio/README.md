@@ -11,7 +11,7 @@ Open it at `/s2g/studio/`.
 | Songs | One page per song. The header holds song status, chosen take, chosen lyric, next action and song notes. Lyrics sit on the left with highlights, quick tags, readiness, status, notes, Suno fields with Copy, editing and where each version came from. Takes sit on the right, each a full planner card plus Choose and Take details. | Lyric Board, Classic view, catalog "Your call" |
 | Triage, Album picks, Sessions, Albums | The Album Planner's own views, unchanged: keys, replace dialog, compare sessions, drag-to-order tracklists, What's missing. | Album Planner |
 | Cleanup | Two lists: takes on Suno but not on the board yet, and songs written but never sent to Suno. Then possible duplicate songs, then the planner's delete and rename lists. | Album Planner, handoff gap lists |
-| Inventory | Songs and every Suno take as tables with CSV export. Local mode adds Studio files, playlists and coverage. | Studio Track Catalog |
+| Inventory | Songs, Instrumentals and every Suno take as tables. Every field is a column you can show or hide (saved on this device only, in `grind.studio.v1.view`). Sort by any column, filter, click a row for all of its data, export the visible columns or everything as CSV. Lyric text is never shown or exported. Local mode adds Studio files, playlists and coverage. | Studio Track Catalog |
 
 The album dock at the bottom is the planner's tracklist panel. Its "Adding to" choice decides which album the M, S, A and C buttons act on.
 

@@ -177,6 +177,25 @@ body:not([data-view="songs"]) .songs-col { display:none; }
 .inv-table td { padding:6px 9px; border-top:1px solid var(--line); white-space:nowrap; }
 .inv-table td:first-child { white-space:normal; min-width:200px; }
 .inv-table tr:hover td { background:var(--card); }
+.inv-table td.num { text-align:right; font-variant-numeric:tabular-nums; }
+.inv-table tbody tr[data-inv-row] { cursor:pointer; }
+.inv-table td { max-width:340px; overflow:hidden; text-overflow:ellipsis; }
+.th-sort { background:none; border:0; color:inherit; font:inherit; font-weight:600; cursor:pointer; padding:0; white-space:nowrap; }
+.th-sort:hover { text-decoration:underline; }
+.col-chooser { margin:8px 0; border:1px solid var(--line); border-radius:10px; padding:6px 10px; background:var(--surface-2); }
+.col-chooser summary { cursor:pointer; font-size:13px; font-weight:600; }
+.col-actions { display:flex; gap:6px; margin:8px 0; }
+.col-groups { display:grid; grid-template-columns:repeat(auto-fill, minmax(190px, 1fr)); gap:8px 14px; }
+.col-groups fieldset { border:0; margin:0; padding:0; min-width:0; }
+.col-groups legend { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); padding:0 0 3px; }
+.col-groups .check { display:flex; gap:6px; font-size:12.5px; padding:1px 0; }
+.inv-drawer { position:fixed; top:0; right:0; bottom:0; width:min(560px, 100vw); overflow:auto; background:var(--surface-2); border-left:1px solid var(--line); box-shadow:-8px 0 24px rgba(0,0,0,.35); padding:14px 16px 40px; z-index:30; }
+.inv-drawer[hidden] { display:none; }
+.drawer-head { display:flex; justify-content:space-between; gap:10px; align-items:flex-start; position:sticky; top:-14px; background:var(--surface-2); padding:6px 0 8px; }
+.drawer-head b { display:block; font-size:16px; } .drawer-head small { color:var(--muted); }
+.inv-drawer h4 { margin:14px 0 4px; font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); }
+.drawer-grid { display:grid; grid-template-columns:minmax(120px, 38%) 1fr; gap:3px 10px; margin:0; font-size:12.5px; }
+.drawer-grid dt { color:var(--muted); } .drawer-grid dd { margin:0; overflow-wrap:anywhere; }
 
 @media (max-width:1180px) { .song-body { grid-template-columns:minmax(0, 1fr); } .song-head { grid-template-columns:minmax(0, 1fr); } }
 @media (max-width:980px) { .studio { grid-template-columns:118px minmax(230px, 280px) minmax(0, 1fr); } .rail-item { font-size:13px; padding:7px 8px; } }
