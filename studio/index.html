@@ -30,6 +30,7 @@
 
   <nav class="rail" id="rail" aria-label="Views">
     <button class="rail-item" data-view="songs" id="tabSongs">Songs <small id="countSongs"></small></button>
+    <button class="rail-item" data-view="instrumentals" id="tabInstrumentals">Instrumentals <small id="countInstr"></small></button>
     <button class="rail-item" data-view="sort" id="tabSort">Triage <small id="countSort"></small></button>
     <button class="rail-item" data-view="consider" id="tabConsider">Album picks <small id="countConsider"></small></button>
     <button class="rail-item" data-view="sessions" id="tabSessions">Sessions <small id="countSessions"></small></button>
@@ -45,9 +46,9 @@
         <select id="fLocation" aria-label="Where the song is"></select>
         <select id="fWriter" aria-label="Writer"></select>
         <select id="fStatus" aria-label="Song status"></select>
-        <select id="fSort" aria-label="Sort songs"></select>
+        <div class="sort-row"><select id="fSort" aria-label="Sort by"></select><button class="btn small" type="button" id="fSortDir" title="Reverse the sort order">↓ Newest first</button></div>
       </div>
-      <label class="check"><input type="checkbox" id="fPrompts"> Show beat prompts</label>
+      <label class="check" id="fPromptsWrap" hidden><input type="checkbox" id="fPrompts"> Show beat prompts</label>
     </div>
     <div class="song-count" id="songCount"></div>
     <div class="song-list" id="songList" role="listbox" aria-label="Songs"></div>

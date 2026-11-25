@@ -211,3 +211,10 @@ body:not([data-view="songs"]) .songs-col { display:none; }
 .coverage { display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:10px; }
 .coverage dl { display:grid; grid-template-columns:max-content 1fr; gap:2px 10px; margin:6px 0 0; font-size:12px; }
 .coverage dt { color:var(--muted-2); } .coverage dd { margin:0; overflow-wrap:anywhere; }
+
+/* Instrumentals section, sort direction, archived stems */
+.sort-row { grid-column:1 / -1; display:grid; grid-template-columns:minmax(0, 1fr) auto; gap:6px; }
+.sort-row select { min-width:0; }
+.sort-row .btn { white-space:nowrap; }
+.stems-toggle { padding:2px 0; }
+.prompt-pane .note-label { display:block; margin-top:10px; }
