@@ -9,7 +9,7 @@ const BASE = process.env.APP_BASE_URL;
 const ARTIFACTS = process.env.ARTIFACT_DIR || path.join(ROOT,'..','album-board-verification');
 function catalogue(text) { const ctx={window:{}}; vm.runInNewContext(text,ctx); return ctx.window; }
 const current = catalogue(fs.readFileSync(path.join(ROOT,'lyrics','songs.js'),'utf8'));
-const original = catalogue(execFileSync('git',['show','HEAD:lyrics/songs.js'],{cwd:ROOT,encoding:'utf8'}));
+const original = catalogue(execFileSync('git',['show','HEAD:lyrics/songs.js'],{cwd:ROOT,encoding:'utf8',maxBuffer:64*1024*1024}));
 const oldVersions = original.ALBUM_SONGS.flatMap(s=>s.versions);
 const allVersions = current.ALBUM_SONGS.flatMap(s=>s.versions);
 assert.equal(new Set(allVersions.map(v=>v.stem)).size,allVersions.length,'Every version must have a distinct rating ID');

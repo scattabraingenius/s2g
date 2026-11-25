@@ -83,6 +83,17 @@ class CatalogSyncTest(unittest.TestCase):
         sync.sync(self.studio, self.catalog, self.private/'again', write=True)
         self.assertEqual(first, (self.repo/'lyrics/songs.js').read_bytes())
 
+    def test_a_stem_keeps_its_published_parent_song_on_every_run(self):
+        self.dataset['clips'][0].update(title='Song (Bass)', base_title='Song (Bass)')
+        self.save_catalog()
+        published = [dict(slug=self.cid, title='Song (Bass)', baseTitle='Song', versions=[dict(stem=self.cid, type='Instrumental')])]
+        (self.repo/'audio/tracks.js').write_text(sync.encode_js('ALBUM_SONGS', published), encoding='utf-8')
+        sync.sync(self.studio, self.catalog, self.private, write=True)
+        self.assertEqual(sync.read_js(self.repo/'audio/tracks.js')[0]['baseTitle'], 'Song')
+        first = (self.repo/'audio/tracks.js').read_bytes()
+        sync.sync(self.studio, self.catalog, self.private/'again', write=True)
+        self.assertEqual(first, (self.repo/'audio/tracks.js').read_bytes())
+
     def test_partial_feed_stops_before_board_writes(self):
         self.dataset['coverage']['sources']['Suno active']['status']='partial'
         self.save_catalog()
