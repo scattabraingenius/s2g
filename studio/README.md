@@ -1,6 +1,6 @@
 # Studio Board
 
-One page for every song: lyric versions beside Suno takes, with scores, album status, highlights, notes and song decisions together. It replaces juggling the Lyric Board, the Audio Board (Album Planner), the Classic view and the local Studio Track Catalog. The older pages keep working and share the same data, so you can switch at your own pace.
+One page for every song: lyric versions beside Suno takes, with scores, album status, highlights, notes and song decisions together. It replaces juggling the Lyric Board, the Audio Board (Album Planner), the Classic view and the local Studio Track Catalog. The older pages (Lyric Board, Audio Board, Album Planner) are archived in place: they are not deleted, not redirected, and still work on the same data, but they now carry a banner pointing here and MM Home links to the Studio instead. Old `?song=<lyric slug>&version=<stem>&q=`, `?take=` and `?lyrics=` links open the matching song here. The Studio can be installed as its own app (id `/s2g/studio/`); the old `/s2g/lyrics/` and `/s2g/audio/` installs keep working. Not in the Studio yet: the lyric tracklist, custom lyric sessions and lyric-only scores, so use the Lyric Board for those.
 
 Open it at `/s2g/studio/`.
 

@@ -46,8 +46,15 @@
     const p = new URLSearchParams(location.search);
     const asInstr = p.get("view") === "instrumentals";
     const view = asInstr ? "songs" : VIEWS.includes(p.get("view")) ? p.get("view") : "songs";
-    let song = M.bySong[p.get("song")] ? p.get("song") : null, version = p.get("v") || null;
-    const t = p.get("t");
+    // Old-board links: ?song=<lyric slug>&version=<stem>&q= (Lyric Board), ?take=<id> and ?lyrics=<stem> (Album Planner).
+    // A Studio key wins; otherwise the lyric slug is mapped to its Studio song. Studio's own v= wins over the old version=.
+    const legacySong = x => M.bySong[x] ? x : M.songOfSlug[x] || null;
+    let song = legacySong(p.get("song")), version = p.get("v") || p.get("version") || null;
+    const lq = (p.get("q") || "").trim();
+    if (lq && !song) ui.q = lq;
+    const oldLyrics = p.get("lyrics");
+    if (!song && oldLyrics && M.versionByStem[oldLyrics]) { song = M.songOfSlug[M.versionByStem[oldLyrics].slug] || null; if (song) version = oldLyrics; }
+    const t = p.get("t") || (M.takes[p.get("take")] ? p.get("take") : null);
     if (t) { song = M.songOfTake[t] || M.songs.find(s => s.clips.some(c => c.id === t))?.key || song; version = M.takes[t]?.lyricStem || version; ui.details.add(t); return {view:"songs", song, version, section:sectionOf(song)}; }
     return {view, song, version, section:song ? sectionOf(song) : asInstr ? "instrumentals" : "songs"};
   }
@@ -921,6 +928,7 @@
   // The tracklist bar opens and closes on every screen size here (the planner only does that on phones).
   $("panelBar").addEventListener("click", () => document.body.classList.toggle("dock-open", $("trackPanel").classList.contains("open")));
 
+  if (ui.q) $("songQ").value = ui.q;   // from an old-board ?q= link
   renderFilters();
   pushHistory(true);
   layout();

@@ -1,5 +1,7 @@
 # Audio Board
 
+> **Old board: archived in place (2026-11-24).** The Studio Board (`/s2g/studio/`) replaces the Audio Board and Album Planner. This page is not deleted and not redirected. It still works fully, shares the same saved data, and is the only place for the lyric tracklist, custom lyric sessions and lyric-only scores until the Studio gets those. Old links such as `?song=<slug>&version=<stem>&q=`, `?take=` and `?lyrics=` also open in the Studio.
+
 A listening companion to Lyric Board. Open `/audio/`. Every Suno clip is one take with a separate score, Shortlist/Maybe/Cut decision, notes and tracklist membership. Recording IDs stay tied to Suno UUIDs even if titles change.
 
 The October 12 catalogue includes 295 clips: 190 vocal takes, 57 instrumentals and 48 stems. Vocals are the initial view. Filter by song, lyric writer, recording type or lyric-match status; search includes current and previous titles, lyrics and source files. Sort by newest, title or score. Custom listening sessions collect chosen takes across songs and sync between devices.

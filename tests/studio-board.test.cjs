@@ -287,3 +287,43 @@ const keysIn = html => [...String(html).matchAll(/data-song="([^"]+)"/g)].map(m 
     console.log(`INVENTORY song columns=${chooserBoxes.length} default=${defHeads.length} take columns=${[...ti.els.page.innerHTML.matchAll(/data-inv-col=/g)].length}`);
   }
 }
+
+// Old-board soft archive: legacy deep links, install manifest, banners, nav.
+{
+  const probe = boot(), data = probe.ctx;
+  const MD = Model.create({lyricSongs:data.LYRIC_SONGS, takeSongs:data.TAKE_SONGS, studio:data.STUDIO});
+  const pageOf = search => boot({search}).els.page;
+  const withVersion = Object.entries(MD.songOfSlug).find(([slug, key]) => slug !== key && (MD.lyricBySlug[slug]?.versions || []).length > 1 && MD.bySong[key]);
+  assert.ok(withVersion, 'found a lyric slug that differs from its Studio key');
+  const [slug, key] = withVersion, versions = MD.lyricBySlug[slug].versions, stem = versions[1].stem;
+  const base = pageOf('?song=' + key).innerHTML;
+  assert.ok(base.includes(MD.bySong[key].title), 'Studio key opens the song');
+  const viaSlug = pageOf('?song=' + encodeURIComponent(slug));
+  assert.ok(viaSlug.innerHTML.includes(MD.bySong[key].title), 'old ?song=<lyric slug> opens the mapped Studio song');
+  const ver = pageOf(`?song=${encodeURIComponent(slug)}&version=${encodeURIComponent(stem)}`);
+  const studioVer = pageOf(`?song=${key}&v=${encodeURIComponent(stem)}`);
+  assert.equal(ver.dataset.version, stem, 'old &version=<stem> selects that lyric version'); assert.equal(ver.dataset.version, studioVer.dataset.version, 'same as the Studio v= link');
+  const q = boot({search:'?q=moon'});
+  assert.equal(q.els.songQ.value, 'moon', 'old ?q= fills the search box'); assert.ok(keysIn(q.els.songList.innerHTML).length < keysIn(boot().els.songList.innerHTML).length, 'and filters the list');
+  const noSlug = pageOf('?song=no-such-slug-xyz'); assert.ok(!/lyrics-pane|prompt-pane/.test(noSlug.innerHTML), 'an unknown slug opens the list, not a broken page');
+  const byLyrics = pageOf('?lyrics=' + encodeURIComponent(stem)); assert.ok(byLyrics.innerHTML.includes(MD.bySong[key].title) && byLyrics.dataset.version === stem, 'old ?lyrics=<stem> opens the song and version');
+  const takeId = Object.keys(MD.takes).find(id => MD.songOfTake[id] && MD.takes[id].type !== 'Stem');
+  const byTake = pageOf('?take=' + encodeURIComponent(takeId)); assert.ok(byTake.innerHTML.includes(MD.bySong[MD.songOfTake[takeId]].title), 'old ?take=<id> opens the take\'s song');
+  pass('old deep links (?song=<slug>&version=&q=, ?take=, ?lyrics=) open the right place in the Studio');
+
+  const R = f => fs.readFileSync(path.join(ROOT, f), 'utf8'), man = JSON.parse(R('studio/manifest.webmanifest'));
+  assert.equal(man.id, '/s2g/studio/'); assert.equal(man.scope, './'); assert.equal(man.start_url, './');
+  assert.ok(man.icons.length >= 3 && man.icons.every(i => fs.existsSync(path.join(ROOT, 'studio', i.src))), 'every manifest icon exists');
+  assert.ok(/rel="manifest" href=".\/manifest.webmanifest"/.test(R('studio/index.html')));
+  assert.equal(JSON.parse(R('lyrics/manifest.webmanifest')).id, '/s2g/lyrics/'); assert.equal(JSON.parse(R('audio/manifest.webmanifest')).id, '/s2g/audio/');
+  assert.ok(R('service-worker.js').includes('"./studio/manifest.webmanifest"'), 'service worker precaches the Studio manifest');
+  for (const [f, href] of [['lyrics/index.html', '../studio/'], ['audio/classic.html', '../studio/'], ['audio/album/index.html', '../../studio/']]) {
+    const h = R(f);
+    assert.ok(/The Studio Board replaces this page\./.test(h) && /Open the Studio/.test(h) && /still works/.test(h) && h.includes(`<a href="${href}"`), f + ' has the banner');
+    assert.ok(h.includes(`class="btn small" href="${href}">Studio Board`), f + ' board switch includes the Studio');
+    assert.ok(/<aside class="archive-banner"[^>]*>[^]*<\/aside>\s*<header class="top">/.test(h) && !/position:\s*(fixed|absolute|sticky)/.test(h.match(/<aside class="archive-banner"[^>]*>/)[0]), f + ' banner sits in the page flow above the header');
+  }
+  const mm = R('mm/index.html'); assert.ok(!/SB2G_URL\+"(lyrics|audio)\/"/.test(mm) && mm.includes('SB2G_URL+"studio/"'), 'MM Home links to the Studio, not the old boards');
+  const gen = R('scripts/update-mm-home.py'); assert.ok(!/items\.push\(\{id:"(audio|album)"[^\n]*\n\s*if\(SB2G_URL\) items\.push\(\{id:"audio"/.test(gen) && gen.includes('id:"studio"'), 'the MM Home generator no longer re-adds the old boards');
+  pass('Studio manifest, banners, board-switch and MM Home nav');
+}

@@ -1,5 +1,7 @@
 # Lyric Board
 
+> **Old board: archived in place (2026-11-24).** The Studio Board (`/s2g/studio/`) replaces the Lyric Board. This page is not deleted and not redirected. It still works fully, shares the same saved data, and is the only place for the lyric tracklist, custom lyric sessions and lyric-only scores until the Studio gets those. Old links such as `?song=<slug>&version=<stem>&q=`, `?take=` and `?lyrics=` also open in the Studio.
+
 A page inside The Grind for the 2026 album: every song from the writing sessions in one list. Read the lyrics, copy each Suno field with one tap, score songs 0 to 100, mark them Shortlist, Maybe or Cut, keep notes, and build the tracklist.
 
 Built by Cue (Claude), October 9, 2026.
