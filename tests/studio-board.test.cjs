@@ -97,7 +97,7 @@ function boot({search = '', prefs = null} = {}) {
   const document = {getElementById:el, querySelectorAll:() => [], querySelector:() => null, addEventListener:(t, f) => { (handlers[t] ||= []).push(f); }, body:{dataset:{}, classList:{toggle() {}, add() {}, remove() {}}}, activeElement:null, hidden:false, createElement:() => el('x' + Math.random())};
   const downloads = [], FakeURL = class extends URL { static createObjectURL(b) { downloads.push(b.text); return 'blob:test'; } static revokeObjectURL() {} };
   const sandbox = {document, console, URLSearchParams, URL:FakeURL, Blob:class { constructor(parts) { this.text = parts.join(''); } }, CSS:{escape:x => x}, JSON, Math, Date, Set, Map, Promise, Object, Array, String, Number, setTimeout, clearTimeout, crypto:require('node:crypto').webcrypto,
-    navigator:{}, localStorage:{getItem:k => (k in store ? store[k] : null), setItem:(k, v) => { store[k] = String(v); }, removeItem:k => { delete store[k]; }},
+    navigator:{}, TextEncoder, localStorage:{getItem:k => (k in store ? store[k] : null), setItem:(k, v) => { store[k] = String(v); }, removeItem:k => { delete store[k]; }},
     location:{pathname:'/s2g/studio/', search}, history:{state:null, replaceState() {}, pushState() {}}, addEventListener() {}, confirm:() => true,
     getSelection:() => null, requestAnimationFrame:f => f()};
   sandbox.window = sandbox; sandbox.globalThis = sandbox;
@@ -186,7 +186,7 @@ const keysIn = html => [...String(html).matchAll(/data-song="([^"]+)"/g)].map(m 
   assert.equal(Object.values(boot().ctx.TAKE_SONGS).length, data.TAKE_SONGS.length); assert.equal(MD.songs.reduce((n, s) => n + s.takeIds.filter(id => MD.takes[id].type === 'Stem').length, 0), 8, 'nothing is deleted');
   pass('stems are archived: hidden on song pages and in Every Suno take, behind a toggle, data untouched');
   // clicks: the rail switches sections, the direction button reverses and remembers the sort, the sort menu picks its natural direction
-  const app = boot(), click = target => app.handlers.click.forEach(f => f({target:{closest:sel => (/^a\[|^\[data-copy-path/.test(sel) ? null : target)}, button:0}));
+  const app = boot(), click = target => app.handlers.click.forEach(f => f({target:{closest:sel => (/^a\[|^\[data-copy-path|^select,option/.test(sel) ? null : target)}, button:0}));
   const railBtn = (view, extra = {}) => ({dataset:{view}, matches:sel => sel.includes('.rail-item'), id:'', ...extra});
   click(railBtn('instrumentals'));
   assert.equal(keysIn(app.els.songList.innerHTML).length, expInstr.length, 'the Instrumentals rail button opens Instrumentals');
@@ -205,7 +205,7 @@ const keysIn = html => [...String(html).matchAll(/data-song="([^"]+)"/g)].map(m 
   // ---- Inventory: Songs | Instrumentals | Every Suno take, column chooser, sorting, filter, drawer, CSV ----
   const lyricLine = (() => { for (const ls of data.LYRIC_SONGS) for (const v of ls.versions) { const l = String(v.lyrics || '').split('\n').map(x => x.trim()).find(x => x.length > 30 && !/^[\[(#]/.test(x)); if (l) return l; } return null; })();
   assert.ok(lyricLine, 'the test needs one real lyric line to prove it never leaks (the line is not stored in this file)');
-  const invClick = (app, target) => app.handlers.click.forEach(f => f({target:{closest:sel => (/^a\[|^\[data-copy-path/.test(sel) ? null : target)}, button:0}));
+  const invClick = (app, target) => app.handlers.click.forEach(f => f({target:{closest:sel => (/^a\[|^\[data-copy-path|^select,option/.test(sel) ? null : target)}, button:0}));
   const btn = (id, dataset = {}) => ({id, dataset, matches:() => false});
   const rowCount = h => +/ of (\d+) rows/.exec(String(h))[1], shownRows = h => +/(\d+) of \d+ rows/.exec(String(h))[1];
   const headers = h => [...String(h).matchAll(/<th[^>]*>(?:<button[^>]*>)?([^<↑↓]+?)(?: [↑↓])?(?:<\/button>)?<\/th>/g)].map(m => m[1].trim());
@@ -326,4 +326,41 @@ const keysIn = html => [...String(html).matchAll(/data-song="([^"]+)"/g)].map(m 
   const mm = R('mm/index.html'); assert.ok(!/SB2G_URL\+"(lyrics|audio)\/"/.test(mm) && mm.includes('SB2G_URL+"studio/"'), 'MM Home links to the Studio, not the old boards');
   const gen = R('scripts/update-mm-home.py'); assert.ok(!/items\.push\(\{id:"(audio|album)"[^\n]*\n\s*if\(SB2G_URL\) items\.push\(\{id:"audio"/.test(gen) && gen.includes('id:"studio"'), 'the MM Home generator no longer re-adds the old boards');
   pass('Studio manifest, banners, board-switch and MM Home nav');
+}
+
+// ---- Tapping a form control must not re-render the page (it closes the native picker on phones) ----
+{
+  const probe = boot(), MD = Model.create({lyricSongs:probe.ctx.LYRIC_SONGS, takeSongs:probe.ctx.TAKE_SONGS, studio:probe.ctx.STUDIO});
+  const song = MD.songs.find(s => MD.versionsOf(s, {}).some(v => Model.hasWords(v.lyrics ?? v.suno?.lyrics ?? '')) && s.takeIds.length);
+  const app = boot({search:'?song=' + encodeURIComponent(song.key)});
+  // Count every write to the page and list, so a re-render shows up even if the html comes out identical.
+  const writes = {page:0, songList:0};
+  for (const id of Object.keys(writes)) { let html = app.els[id].innerHTML; Object.defineProperty(app.els[id], 'innerHTML', {get:() => html, set:v => { html = v; writes[id]++; }}); }
+  assert.ok(/data-song-field="status"/.test(app.els.page.innerHTML), 'song page is open with its selects');
+  // The page-wide data-* container the real browser matches around a tap: <body data-view>, or the row's [data-version].
+  const containers = [{dataset:{view:'songs'}, id:'', matches:() => false}, {dataset:{version:'x'}, id:'', matches:() => false}];
+  const tap = (tag, props) => containers.forEach(container => {
+    const t = {tag, dataset:{}, id:'', ...props}; t.closest = sel => (/^a\[|^\[data-copy-path/.test(sel) ? null : /^select,option/.test(sel) ? (['select', 'option', 'input', 'textarea', 'label'].includes(tag) ? t : null) : container);
+    app.handlers.click.forEach(f => f({target:t, button:0}));
+  });
+  const before = {...writes}, selects = [
+    ['select', {id:'fLocation'}], ['select', {id:'fWriter'}], ['select', {id:'fStatus'}], ['select', {id:'fSort'}], ['select', {id:'takeType'}],
+    ['select', {dataset:{songField:'status'}}], ['select', {dataset:{songField:'chosen'}}], ['select', {dataset:{songField:'lyric'}}], ['select', {dataset:{lyricField:'readiness'}}], ['select', {className:'take-readiness'}],
+    ['option', {}], ['input', {dataset:{songText:'next'}}], ['textarea', {dataset:{songText:'notes'}}], ['input', {id:'songQ'}], ['input', {dataset:{invCol:'title'}}], ['label', {}],
+  ];
+  for (const [tag, props] of selects) tap(tag, props);
+  assert.deepEqual(writes, before, 'tapping a select, option, input, textarea or label never re-renders the page or the list');
+  // control: a data-* tap on a non-form element still navigates, so the counter would have caught a re-render
+  tap('div', {dataset:{songBack:''}});
+  assert.ok(writes.page > before.page, 'control: a back-button tap does re-render');
+  pass('taps on selects and other form controls leave the page alone (mobile picker stays open)');
+
+  // change events still work on the same controls
+  const app2 = boot({search:'?song=' + encodeURIComponent(song.key)}), change = t => app2.handlers.change.forEach(f => f({target:t}));
+  const listBefore = app2.els.songList.innerHTML;
+  change({id:'fStatus', value:'complete', dataset:{}}); assert.equal(JSON.parse(app2.store['grind.studio.v1.view']).status, 'complete', 'sidebar select change saves');
+  change({id:'fSort', value:'written', dataset:{}}); assert.equal(JSON.parse(app2.store['grind.studio.v1.view']).sorts.songs.by, 'written');
+  change({dataset:{songField:'status'}, value:'complete', id:''});
+  assert.ok(Object.keys(app2.store).some(k => /studio\.v1/.test(k) && !/view/.test(k)), 'song-page select change writes the decision');
+  pass('change events on the selects still apply');
 }
