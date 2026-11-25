@@ -777,6 +777,8 @@
 
   // ---------- events ----------
   document.addEventListener("click", e => {
+    // Tapping a form control must never re-render: on phones that closes the native picker / keyboard. Controls use their own change/input handlers.
+    if (e.target.closest?.("select,option,input,textarea,label")) return;
     // Planner links to a take ("Details", "Open in Lyric Board"): open it here instead of loading a new page.
     const a = e.target.closest?.('a[href^="./?t="]');
     if (a && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.button === 0) {
