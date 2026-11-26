@@ -21,13 +21,11 @@
     ["created", "Date created", "date", "desc"], ["edited", "Last edited", "date", "desc"], ["firstTake", "First Suno take", "date", "asc"], ["latestTake", "Latest Suno take", "date", "desc"], ["written", "Date written", "date", "desc"]];
   const SORT_WORDS = {date:{desc:"Newest first", asc:"Oldest first"}, text:{asc:"A to Z", desc:"Z to A"}, num:{desc:"Highest first", asc:"Lowest first"}};
   const SECTIONS = {songs:{label:"Songs", one:"song", many:"songs"}, instrumentals:{label:"Instrumentals", one:"instrumental", many:"instrumentals"}};
-  // A song is an instrumental when it has no lyric packet, or no version of it has sung words (hasWords, model.js).
-  // Your own copies count: writing words into an instrumental moves it to Songs. Set once the stores exist.
+  // Your own copies count; missing draft links do not determine the song's type.
   let customLyrics = () => ({});
-  function isInstrumental(s) {
-    if (s._instr === undefined) s._instr = !M.versionsOf(s, {}).some(v => StudioModel.hasWords(v.lyrics ?? v.suno?.lyrics ?? ""));
-    return s._instr && !M.versionsOf(s, customLyrics()).some(v => v.custom && StudioModel.hasWords(v.suno?.lyrics ?? v.lyrics ?? ""));
-  }
+  const instrumentalKeys = new Set(M.songs.filter(s => M.isInstrumental(s)).map(s => s.key));
+  const isInstrumental = s => instrumentalKeys.has(s.key) &&
+    !M.versionsOf(s, customLyrics()).some(v => v.custom && StudioModel.hasWords(v.suno?.lyrics ?? v.lyrics));
   const sectionOf = key => { const s = M.bySong[key]; return s && isInstrumental(s) ? "instrumentals" : "songs"; };
   const LYRIC_STATUSES = [["short", "Shortlist"], ["maybe", "Maybe"], ["revision", "Needs revision"], ["preferred", "Preferred"], ["cut", "Cut"]];
   const SONG_STATUSES = [["needs_review", "Needs review"], ["incomplete", "Incomplete"], ["complete", "Complete"]];
@@ -39,7 +37,7 @@
   // Inventory columns and sorts are remembered on this device only (this view-prefs key; nothing here syncs).
   const cleanInvSort = x => Object.fromEntries(["songs", "instrumentals", "takes"].filter(t => x?.[t]?.col).map(t => [t, {col:String(x[t].col), dir:x[t].dir === "desc" ? "desc" : "asc"}]));
   const ui = {view:"songs", section:"songs", song:null, version:null, q:"", location:prefs.location || "all", writer:prefs.writer || "all", status:prefs.status || "all", sorts, showStems:!!prefs.showStems,
-    prompts:!!prefs.prompts, takeType:prefs.takeType || "listen", color:prefs.color || "yellow", editing:false, details:new Set(), inv:prefs.inv || "songs", invQ:"", invLimit:200,
+    prompts:!!prefs.prompts, takeType:prefs.takeType || "listen", color:prefs.color || "yellow", editing:false, details:new Map(), inv:prefs.inv || "songs", invQ:"", invLimit:200,
     invCols:{songs:Array.isArray(prefs.invCols?.songs) ? prefs.invCols.songs.map(String) : null, takes:Array.isArray(prefs.invCols?.takes) ? prefs.invCols.takes.map(String) : null}, invSort:cleanInvSort(prefs.invSort), invOpen:null, chooserOpen:false};
   function savePrefs() { try { localStorage.setItem(VIEW_KEY, JSON.stringify({location:ui.location, writer:ui.writer, status:ui.status, sort:ui.sorts.songs.by, sorts:ui.sorts, showStems:ui.showStems, prompts:ui.prompts, takeType:ui.takeType, color:ui.color, inv:ui.inv, invCols:ui.invCols, invSort:ui.invSort})); } catch (err) {} }
   function readRoute() {
@@ -55,7 +53,7 @@
     const oldLyrics = p.get("lyrics");
     if (!song && oldLyrics && M.versionByStem[oldLyrics]) { song = M.songOfSlug[M.versionByStem[oldLyrics].slug] || null; if (song) version = oldLyrics; }
     const t = p.get("t") || (M.takes[p.get("take")] ? p.get("take") : null);
-    if (t) { song = M.songOfTake[t] || M.songs.find(s => s.clips.some(c => c.id === t))?.key || song; version = M.takes[t]?.lyricStem || version; ui.details.add(t); return {view:"songs", song, version, section:sectionOf(song)}; }
+    if (t) { song = M.songOfTake[t] || M.songs.find(s => s.clips.some(c => c.id === t))?.key || song; version = M.takes[t]?.lyricStem || version; ui.details.set(t, true); return {view:"songs", song, version, section:sectionOf(song)}; }
     return {view, song, version, section:song ? sectionOf(song) : asInstr ? "instrumentals" : "songs"};
   }
   Object.assign(ui, readRoute());
@@ -354,6 +352,8 @@
     const legacy = takeRating(stem).status;
     return `<div class="take-details">
       <dl>
+        ${t.intent ? `<dt>Title intent</dt><dd>${esc(t.intent.type === "Vocal" ? `${t.intent.writer} co-write · lyrics expected · ${t.intent.version === null ? "draft version unknown" : "draft v" + t.intent.version}` : `Instrumental · ${t.intent.version === null ? "arrangement version unknown" : "arrangement v" + t.intent.version}`)}</dd>` : ""}
+        <dt>Take type in metadata</dt><dd>${esc(t.reportedType || "Not specified")}</dd>
         <dt>Voice</dt><dd>${esc(voice)}</dd>
         <dt>Lyric match</dt><dd>${esc(t.match || "–")}</dd>
         ${t.oldTitle ? `<dt>Previously</dt><dd>${esc(t.oldTitle)}</dd>` : ""}
@@ -366,16 +366,27 @@
       <button class="btn small" data-copy="take-title:${esc(stem)}">Copy Suno title</button>
     </div>`;
   }
-  function takeWrap(stem, s) {
-    const chosen = decision(s.key).chosen === stem, open = ui.details.has(stem);
+  function detailsOpen(stem, unlinked) {
+    const t = M.takes[stem];
+    return ui.details.get(stem) ?? (unlinked && (t.intent?.type === "Vocal" || t.evidence === "Vocal") && !!((t.suno?.lyrics ?? t.lyrics) || t.suno?.style));
+  }
+  function toggleTakeDetails(stem) {
+    const s = M.bySong[ui.song];
+    if (!s || !M.takes[stem]) return;
+    ui.details.set(stem, !detailsOpen(stem, M.unlinkedTakes(s, versionsOf(s)).includes(stem)));
+    renderSongPage();
+  }
+  function takeWrap(stem, s, unlinked = false) {
+    const t = M.takes[stem], chosen = decision(s.key).chosen === stem, open = detailsOpen(stem, unlinked);
     return `<div class="take-wrap${chosen ? " chosen" : ""}" data-wrap="${esc(stem)}">${P().card(stem)}
-      <div class="take-extra"><button class="btn small${chosen ? " primary" : ""}" data-choose="${esc(stem)}" aria-pressed="${chosen}">${chosen ? "★ Chosen take" : "☆ Choose this take"}</button><button class="btn small" data-details="${esc(stem)}" aria-expanded="${open}">Take details ${open ? "▾" : "▸"}</button></div>
+      <div class="take-extra"><button class="btn small${chosen ? " primary" : ""}" data-choose="${esc(stem)}" aria-pressed="${chosen}">${chosen ? "★ Chosen take" : "☆ Choose this take"}</button><button class="btn small" data-details="${esc(stem)}" aria-expanded="${open}">Take details ${open ? "▾" : "▸"}</button>${unlinked ? '<span class="meta">Draft not linked</span>' : ""}${t.checkType ? '<span class="meta">Check type</span>' : ""}</div>
       ${open ? takeDetails(stem) : ""}</div>`;
   }
   function takesPane(s, versions, v) {
     const own = v ? M.takesForVersion(s, v.stem) : [];
-    const other = s.takeIds.filter(id => !own.includes(id));
     const visible = list => list.filter(id => !gone(id) && typeOk(id));
+    const unlinked = visible(M.unlinkedTakes(s, versions));
+    const other = visible(s.takeIds.filter(id => !own.includes(id) && !unlinked.includes(id)));
     const stems = s.takeIds.filter(isStem).length, deleted = s.takeIds.filter(gone).length, fresh = M.newClips(s);
     const considered = new Set(Object.keys(plan().considered || {}));
     const types = [["listen", "Vocals and instrumentals"], ["Vocal", "Vocals"], ["Instrumental", "Instrumentals"]];
@@ -385,7 +396,8 @@
       <div class="pane-head"><div><b>Takes</b><small>Status buttons apply to ${esc(target?.name || "the album")} (change it at the bottom)</small></div>
         <select id="takeType" aria-label="Which takes to show">${types.map(([k, l]) => `<option value="${k}"${k === (ui.takeType === "all" || ui.takeType === "Stem" ? "listen" : ui.takeType) ? " selected" : ""}>${l}</option>`).join("")}</select></div>${stemChoice}
       ${v ? `<h3 class="sub">This version (${visible(own).length})</h3>${visible(own).map(id => takeWrap(id, s)).join("") || '<div class="empty-note">No takes of this version yet.</div>'}` : ""}
-      ${visible(other).length ? `<details class="panel" ${v && visible(own).length ? "" : "open"}><summary>${v ? "Other takes of this song" : "Takes"} (${visible(other).length})</summary>${visible(other).map(id => takeWrap(id, s)).join("")}</details>` : ""}
+      ${other.length ? `<details class="panel" ${!visible(own).length || other.some(id => ui.details.get(id)) ? "open" : ""}><summary>Other linked takes (${other.length})</summary>${other.map(id => takeWrap(id, s)).join("")}</details>` : ""}
+      ${unlinked.length ? `<details class="panel" open><summary>Takes without a linked draft (${unlinked.length})</summary>${unlinked.map(id => takeWrap(id, s, true)).join("")}</details>` : ""}
       ${fresh.length ? `<details class="panel" open><summary>Newer on Suno, not in the board snapshot (${fresh.length})</summary>${fresh.map(c => `<div class="fresh-take"><div><b>${esc(c.title)}</b><small>${esc([c.writer, c.version, c.mode, dur(c.duration), (c.created || "").slice(0, 10)].filter(Boolean).join(" · "))}</small></div><div class="take-actions"><a class="btn small" data-play href="https://suno.com/song/${encodeURIComponent(c.id)}" target="_blank" rel="noopener">▶ Suno</a><button class="btn small" data-consider="${esc(c.id)}" ${considered.has(c.id) ? "disabled" : ""}>${considered.has(c.id) ? "In Album picks" : "Add to Album picks"}</button></div></div>`).join("")}<div class="hint">Album picks shows these as "Suno ${"xxxxxxxx"}" until the board data is rebuilt; scores and statuses carry over.</div></details>` : ""}
       <div class="hint">${[stems && !ui.showStems ? `${stems} archived stem${stems === 1 ? "" : "s"} hidden` : "", deleted ? `${deleted} deleted on Suno` : ""].filter(Boolean).join(" · ")}</div>
     </div>`;
@@ -784,8 +796,8 @@
     if (a && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.button === 0) {
       e.preventDefault();
       const stem = new URL(a.href).searchParams.get("t"), song = M.songOfTake[stem];
-      if (ui.view === "songs" && ui.song === song) { ui.details.has(stem) ? ui.details.delete(stem) : ui.details.add(stem); renderSongPage(); return; }
-      ui.details.add(stem); go({view:"songs", song, version:M.takes[stem]?.lyricStem || null}); return;
+      if (ui.view === "songs" && ui.song === song) return toggleTakeDetails(stem);
+      ui.details.set(stem, true); go({view:"songs", song, version:M.takes[stem]?.lyricStem || null}); return;
     }
     const cp = e.target.closest?.("[data-copy-path]"); if (cp) { copyText(cp.dataset.copyPath, "path"); return; }
     const t = e.target.closest("[data-view],#fSortDir,[data-song],[data-version],[data-song-back],[data-edit],[data-color],[data-color-names],[data-lyric-undo],[data-copy],[data-choose],[data-details],[data-consider],[data-lyric-status],[data-lyric-tag],[data-del-mark],[data-del-copy],[data-save-studio],[data-inv],[data-inv-sort],[data-inv-row],#invCsv,#invCsvAll,#invDrawerCsv,#invDrawerClose,#colsAll,#colsReset,#invMore,#studioRetry,#dataBtn,#dataClose,#lyricExport,#reviewExport,#studioExport,#lyricImport,#colorSave,#colorCancel");
@@ -833,7 +845,7 @@
     if (t.dataset.song !== undefined) {
       if (!t.dataset.song) return;
       const take = t.closest("[data-take]")?.dataset.take;
-      if (take && M.takes[take]) ui.details.add(take);
+      if (take && M.takes[take]) ui.details.set(take, true);
       return go({view:"songs", song:t.dataset.song, version:take ? M.takes[take]?.lyricStem || null : null});
     }
     if (t.dataset.songBack !== undefined) return go({song:null, version:null});
@@ -854,7 +866,7 @@
       return val ? copyText(val, {sunoLyrics:"Suno lyrics", "take-style":"generation style", "take-exclude":"excluded styles", "take-lyrics":"Suno lyrics", "take-title":"Suno title"}[kind] || kind) : toast("Nothing to copy");
     }
     if (t.dataset.choose) { const cur = decision(s.key).chosen; saveSong(s.key, {chosen:cur === t.dataset.choose ? "" : t.dataset.choose}); toast(cur === t.dataset.choose ? "Chosen take cleared" : "Chosen take set"); renderSongPage(); return; }
-    if (t.dataset.details) { ui.details.has(t.dataset.details) ? ui.details.delete(t.dataset.details) : ui.details.add(t.dataset.details); return renderSongPage(); }
+    if (t.dataset.details) return toggleTakeDetails(t.dataset.details);
     if (t.dataset.consider) { const n = P().consider([t.dataset.consider]); toast(n ? "Added to Album picks" : "Already in Album picks"); return renderSongPage(); }
     if (t.dataset.saveStudio !== undefined) return saveToStudio();
     if (t.dataset.delCopy !== undefined) {

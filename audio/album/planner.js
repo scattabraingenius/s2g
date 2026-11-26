@@ -123,6 +123,7 @@ window.addEventListener("popstate", e => {
 const take = stem => TAKES[stem] || window.ALBUM_TRASHED_TAKES?.[stem] || {stem, title:"Suno " + stem.slice(0, 8), baseTitle:"Not in catalogue", missing:true, writer:"", duration:0, createdAt:""};
 const item = stem => state.considered[stem] || {};
 const available = stems => stems.filter(stem => !!TAKES[stem]);
+const pendingDeletes = () => available(Object.keys(state.considered)).filter(tagged);
 // Keep saved records for unavailable takes; only the current catalog is rendered.
 const visibleAlbum = a => ({...a, order:available(a.order), cut:available(a.cut)});
 const live = () => available(Object.keys(state.considered)).filter(s => !item(s).delDone);   // deleted on Suno = gone from the plan
@@ -468,7 +469,7 @@ function renderSortChrome() {
   const b = sortBuckets();
   $("sortChips").innerHTML = [["todo", "To sort"], ["later", "Saved for later"], ["done", "On an album"]].map(([k, l]) => `<button class="chip" data-sf="${k}" aria-pressed="${ui.sortFilter === k}">${l} <small>${b[k].length}</small></button>`).join("");
   const albums = Object.values(state.albums).sort((x, y) => x.created - y.created);
-  $("sortStats").textContent = albums.map(o => `${shortName(o)}: ${o.order.length}`).join(" · ") + ` · ${Object.keys(state.considered).filter(tagged).length} tagged delete`;
+  $("sortStats").textContent = albums.map(o => `${shortName(o)}: ${o.order.length}`).join(" · ") + ` · ${pendingDeletes().length} tagged delete`;
 }
 function renderSort() {
   songOptions();
@@ -1000,7 +1001,7 @@ $("cleanup").addEventListener("change", e => {
   if (e.target.matches("[data-rename-done]")) { if (e.target.checked) i.renameDone = Date.now(); else delete i.renameDone; save(); }
 });
 $("cleanup").addEventListener("click", async e => {
-  if (e.target.closest("#copyDeletes")) { const list = Object.keys(state.considered).filter(tagged).map(s => `${take(s).title}  ${suno(s)}`).join("\n"); toast(await copyText(list) ? "Delete list copied" : "Copy failed"); }
+  if (e.target.closest("#copyDeletes")) { const list = pendingDeletes().map(s => `${take(s).title}  ${suno(s)}`).join("\n"); toast(await copyText(list) ? "Delete list copied" : "Copy failed"); }
   const c = e.target.closest("[data-copy-name]"); if (c) toast(await copyText(item(c.closest("[data-stem]").dataset.stem).name) ? "Name copied" : "Copy failed");
   const k = e.target.closest("[data-untag]");
   if (k) { e.preventDefault(); const stem = k.closest("[data-stem]").dataset.stem; snapshot(stem); delete state.considered[stem].del; save(); toast("Delete tag removed. Back in Album picks.", true); }

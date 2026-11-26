@@ -30,6 +30,15 @@ assert.equal(M.versionsOf(s, {'dearly-beloved':[{stem:'mine-x', label:'My copy 1
 assert.equal(M.shortVersionLabel(lyricSongs[0].versions[0], s.title), 'v02 Cue');
 assert.equal(M.shortVersionLabel({...lyricSongs[0].versions[1], slug:'dearly-beloved'}, s.title), 'Anchor Cue');
 pass('model joins lyric versions, board takes and newer Suno clips into one song');
+assert.deepEqual(Model.titleIntent('Fixture v02_CUE  '), {base:'Fixture', suffix:'cue', version:'02', type:'Vocal', writer:'Cue'});
+assert.deepEqual(Model.titleIntent('Fixture_misc'), {base:'Fixture', suffix:'misc', version:null, type:'Vocal', writer:'Misc'});
+assert.deepEqual(Model.titleIntent('Fixture v3_inst'), {base:'Fixture', suffix:'inst', version:'3', type:'Instrumental', writer:null});
+assert.equal(Model.titleIntent('Fixture v2_other'), null);
+assert.equal(Model.titleIntent('Fixture v2 alt_cue').version, null);
+const unknown = Model.create({takeSongs:[take(T3, 'Fixture', {lyrics:''})], studio:{songs:[{key:'fixture', title:'Fixture'}], takeSong:{[T3]:'fixture'}}});
+assert.equal(unknown.takes[T3].evidence, null);
+assert.ok(!unknown.isInstrumental(unknown.bySong.fixture), 'missing lyrics and no draft are not instrumental evidence');
+pass('title intent, version and missing take evidence are independent');
 
 // ---- song-decision store ----
 const S = StudioSync;
@@ -114,7 +123,7 @@ const keysIn = html => [...String(html).matchAll(/data-song="([^"]+)"/g)].map(m 
   const probe = boot();
   const data = probe.ctx;
   const MD = Model.create({lyricSongs:data.LYRIC_SONGS, takeSongs:data.TAKE_SONGS, studio:data.STUDIO});
-  const instrOf = s => !MD.versionsOf(s, {}).some(v => Model.hasWords(v.lyrics ?? v.suno?.lyrics ?? ''));
+  const instrOf = s => MD.isInstrumental(s);
   const expSongs = MD.songs.filter(s => !instrOf(s)), expInstr = MD.songs.filter(s => instrOf(s) && !s.prompt), expPrompts = MD.songs.filter(s => s.prompt);
   const titleKey = t => MD.songs.find(s => s.title === t).key;
 
