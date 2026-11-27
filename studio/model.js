@@ -6,8 +6,23 @@
   else root.StudioModel = api;
 })(typeof window === "object" ? window : globalThis, function () {
   "use strict";
-  // Suno labels some instrumentals "Vocal". A take with no sung words is an instrumental (same rule as the planner).
   const hasWords = text => /[\p{L}\p{N}]/u.test(String(text || "").replace(/\[[^\]]*\]|\([^)]*\)/g, " "));
+  const SUFFIXES = Object.freeze({cue:{type:"Vocal", writer:"Cue"}, misc:{type:"Vocal", writer:"Misc"}, inst:{type:"Instrumental", writer:null}});
+  function titleIntent(title) {
+    const text = String(title ?? "").trimEnd(), end = /_([a-z]+)$/i.exec(text);
+    const suffix = end?.[1].toLowerCase();
+    if (!Object.hasOwn(SUFFIXES, suffix)) return null;
+    const prefix = text.slice(0, end.index), version = /\s+v(\d+)$/i.exec(prefix);
+    const base = (version ? prefix.slice(0, version.index) : prefix).trimEnd();
+    return base ? {base, suffix, version:version?.[1] ?? null, ...SUFFIXES[suffix]} : null;
+  }
+  function takeEvidence(t) {
+    const lyrics = t.suno?.lyrics ?? t.lyrics;
+    if (t.reportedType === "Stem") return null;
+    if (t.reportedType === "Instrumental" || (!hasWords(lyrics) && /[\[(]\s*instrumental\b/i.test(lyrics || ""))) return "Instrumental";
+    // A generic Vocal label alone is not proof of recorded vocals; neither is empty metadata proof of an instrumental.
+    return hasWords(lyrics) ? "Vocal" : null;
+  }
   const WRITER_ORDER = ["Scatta", "Cue", "Misc", "Unknown"];
 
   function create({lyricSongs = [], takeSongs = [], studio = {songs:[], takeSong:{}, clips:[]}}) {
@@ -17,8 +32,10 @@
 
     const takes = {};
     for (const s of takeSongs) {
-      const v = s.versions[0], lyrics = v.suno?.lyrics ?? v.lyrics;
-      takes[s.slug] = {...v, type:(v.type || "Vocal") === "Vocal" && typeof lyrics === "string" && !hasWords(lyrics) ? "Instrumental" : (v.type || "Vocal"), stem:s.slug, title:s.title, baseTitle:s.baseTitle || s.title};
+      const v = s.versions[0], intent = titleIntent(s.title);
+      const evidence = takeEvidence({...v, reportedType:v.type});
+      takes[s.slug] = {...v, reportedType:v.type, intent, evidence, checkType:!!(intent && evidence && intent.type !== evidence),
+        type:v.type === "Stem" ? "Stem" : evidence || v.type || "Vocal", stem:s.slug, title:s.title, baseTitle:s.baseTitle || intent?.base || s.title};
     }
 
     const songs = studio.songs.map(s => ({...s, takeIds:[], clips:[]}));
@@ -58,6 +75,14 @@
       const stems = new Set(versions.map(v => v.stem));
       return s.takeIds.filter(id => !stems.has(takes[id].lyricStem));
     }
+    function isInstrumental(s, custom = {}) {
+      const versions = versionsOf(s, custom);
+      const performances = s.takeIds.map(id => takes[id]).filter(t => t.type !== "Stem");
+      if (versions.some(v => hasWords(v.custom ? v.suno?.lyrics ?? v.lyrics : v.lyrics ?? v.suno?.lyrics)) ||
+          performances.some(t => t.intent?.type === "Vocal" || t.evidence === "Vocal")) return false;
+      return s.prompt || performances.some(t => t.intent?.type === "Instrumental" || t.evidence === "Instrumental") ||
+        versions.some(v => !!v.suno?.instrumental) || s.clips.some(c => !c.trashed && c.mode === "Instrumental requested");
+    }
     function newClips(s) { return s.clips.filter(c => !c.onBoard && !c.trashed); }
     function versionLabel(v) {
       if (v.custom) return v.label || "My copy";
@@ -88,13 +113,13 @@
       if (s._search) return s._search;
       const parts = [s.title, ...(s.bases || []), ...(s.writers || [])];
       for (const slug of s.lyrics || []) for (const v of lyricBySlug[slug]?.versions || []) parts.push(v.title, v.lyrics);
-      for (const id of s.takeIds) parts.push(takes[id].title, takes[id].oldTitle);
+      for (const id of s.takeIds) parts.push(takes[id].title, takes[id].intent?.base, takes[id].oldTitle);
       for (const c of s.clips) parts.push(c.title);
       return (s._search = parts.filter(Boolean).join("\n").toLowerCase());
     }
     const writers = [...new Set(songs.flatMap(s => s.writers))].sort((a, b) => (WRITER_ORDER.indexOf(a) + 1 || 9) - (WRITER_ORDER.indexOf(b) + 1 || 9));
     return {songs, bySong, takes, lyricBySlug, versionByStem, songOfTake, songOfSlug, writers,
-      versionsOf, takesForVersion, unlinkedTakes, newClips, versionLabel, shortVersionLabel, akaOf, searchText};
+      versionsOf, takesForVersion, unlinkedTakes, isInstrumental, newClips, versionLabel, shortVersionLabel, akaOf, searchText};
   }
-  return {create, hasWords};
+  return {create, hasWords, titleIntent};
 });
